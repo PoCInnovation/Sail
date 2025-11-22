@@ -1,0 +1,32 @@
+{
+  "name": "@sail/backend",
+  "version": "1.0.0",
+  "description": "Sail Flash Loan Builder - Core PTB Engine & Protocol Adapters",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "lint": "eslint src --ext .ts"
+  },
+  "keywords": ["sui", "flash-loan", "ptb", "defi", "arbitrage"],
+  "author": "",
+  "license": "MIT",
+  "packageManager": "pnpm@10.17.0",
+  "dependencies": {
+    "@mysten/sui": "^1.14.0",
+    "navi-sdk": "^1.2.2",
+    "@cetusprotocol/cetus-sui-clmm-sdk": "^4.1.0",
+    "zod": "^3.23.8",
+    "uuid": "^11.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@types/uuid": "^10.0.0",
+    "typescript": "^5.7.2",
+    "eslint": "^9.16.0",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0"
+  }
+}

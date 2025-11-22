@@ -1,0 +1,140 @@
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "version": "1.0.0",
+  "meta": {
+    "name": "Simple SUI-USDC Arbitrage",
+    "author": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    "description": "Borrow 10 SUI from Navi, swap to USDC on Cetus, swap back to SUI on Cetus, repay with profit",
+    "created_at": 1700000000000,
+    "updated_at": 1700000000000,
+    "tags": ["arbitrage", "sui-usdc", "navi", "cetus", "beginner"]
+  },
+  "nodes": [
+    {
+      "id": "borrow_1",
+      "type": "FLASH_BORROW",
+      "protocol": "NAVI",
+      "label": "Borrow 10 SUI from Navi",
+      "params": {
+        "asset": "0x2::sui::SUI",
+        "amount": "10000000000"
+      },
+      "outputs": [
+        {
+          "id": "coin_borrowed",
+          "type": "Coin<0x2::sui::SUI>",
+          "output_type": "COIN"
+        },
+        {
+          "id": "receipt",
+          "type": "FlashLoanReceipt",
+          "output_type": "RECEIPT"
+        }
+      ],
+      "position": { "x": 100, "y": 200 }
+    },
+    {
+      "id": "swap_1",
+      "type": "DEX_SWAP",
+      "protocol": "CETUS",
+      "label": "Swap SUI → USDC",
+      "params": {
+        "pool_id": "0xCetusPoolSUI_USDC",
+        "coin_type_a": "0x2::sui::SUI",
+        "coin_type_b": "0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN",
+        "direction": "A_TO_B",
+        "amount_mode": "EXACT_IN",
+        "amount": "10000000000",
+        "slippage_tolerance": "0.01"
+      },
+      "inputs": {
+        "coin_in": "borrow_1.coin_borrowed"
+      },
+      "outputs": [
+        {
+          "id": "coin_out",
+          "type": "Coin<USDC>",
+          "output_type": "COIN"
+        }
+      ],
+      "position": { "x": 400, "y": 200 }
+    },
+    {
+      "id": "swap_2",
+      "type": "DEX_SWAP",
+      "protocol": "CETUS",
+      "label": "Swap USDC → SUI",
+      "params": {
+        "pool_id": "0xCetusPoolUSDC_SUI",
+        "coin_type_a": "0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN",
+        "coin_type_b": "0x2::sui::SUI",
+        "direction": "A_TO_B",
+        "amount_mode": "EXACT_IN",
+        "amount": "15000000",
+        "slippage_tolerance": "0.01"
+      },
+      "inputs": {
+        "coin_in": "swap_1.coin_out"
+      },
+      "outputs": [
+        {
+          "id": "coin_out",
+          "type": "Coin<0x2::sui::SUI>",
+          "output_type": "COIN"
+        }
+      ],
+      "position": { "x": 700, "y": 200 }
+    },
+    {
+      "id": "repay_1",
+      "type": "FLASH_REPAY",
+      "protocol": "NAVI",
+      "label": "Repay Navi Flash Loan",
+      "params": {
+        "asset": "0x2::sui::SUI"
+      },
+      "inputs": {
+        "coin_repay": "swap_2.coin_out",
+        "receipt": "borrow_1.receipt"
+      },
+      "position": { "x": 1000, "y": 200 }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_1",
+      "source": "borrow_1",
+      "source_output": "coin_borrowed",
+      "target": "swap_1",
+      "target_input": "coin_in",
+      "edge_type": "COIN",
+      "coin_type": "0x2::sui::SUI"
+    },
+    {
+      "id": "edge_2",
+      "source": "swap_1",
+      "source_output": "coin_out",
+      "target": "swap_2",
+      "target_input": "coin_in",
+      "edge_type": "COIN",
+      "coin_type": "0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN"
+    },
+    {
+      "id": "edge_3",
+      "source": "swap_2",
+      "source_output": "coin_out",
+      "target": "repay_1",
+      "target_input": "coin_repay",
+      "edge_type": "COIN",
+      "coin_type": "0x2::sui::SUI"
+    },
+    {
+      "id": "edge_4",
+      "source": "borrow_1",
+      "source_output": "receipt",
+      "target": "repay_1",
+      "target_input": "receipt",
+      "edge_type": "RECEIPT"
+    }
+  ]
+}
