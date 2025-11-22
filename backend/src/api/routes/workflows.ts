@@ -75,6 +75,7 @@ router.post('/workflows/upload', async (req: Request, res: Response) => {
         workflowId: strategy.id,
         metadataBlobId: result.metadataBlobId,
         dataBlobId: result.dataBlobId,
+        price_sui: strategy.meta.price_sui,
         walrusUrls: {
           metadata: `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${result.metadataBlobId}`,
           data: `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${result.dataBlobId}`,
