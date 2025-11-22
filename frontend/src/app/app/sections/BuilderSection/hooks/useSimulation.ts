@@ -2,6 +2,7 @@ import { useState } from "react";
 import { SimulationResult } from "../components/types";
 import { buildStrategyFromBlocks } from "../utils/strategyBuilder";
 import { Block } from "../components/types";
+import { api } from "@/services/api";
 
 interface UseSimulationProps {
   blocks: Block[];
@@ -28,12 +29,7 @@ export function useSimulation({ blocks, tokenMap, senderAddress, onSuccess }: Us
       const strategy = buildStrategyFromBlocks(blocks, tokenMap, senderAddress);
 
       // 1. Validate
-      const validateRes = await fetch("http://localhost:3000/api/validate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ strategy }),
-      });
-      const validateData = await validateRes.json();
+      const validateData = await api.validateStrategy(strategy);
 
       if (!validateData.valid) {
         const errorMsg = validateData.errors.map((e: any) => `${e.rule_id}: ${e.message}`).join("\n");
@@ -41,15 +37,7 @@ export function useSimulation({ blocks, tokenMap, senderAddress, onSuccess }: Us
       }
 
       // 2. Simulate
-      const simulateRes = await fetch("http://localhost:3000/api/simulate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          strategy, 
-          sender: senderAddress 
-        }),
-      });
-      const simulateData = await simulateRes.json();
+      const simulateData = await api.simulateStrategy(strategy, senderAddress);
 
       if (!simulateData.success && simulateData.errors?.length > 0) {
         throw new Error(simulateData.errors[0].message);

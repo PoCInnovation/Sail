@@ -7,10 +7,29 @@ export function useBlocks() {
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
 
   const addBlock = (type: BlockType) => {
+    let initialParams: Record<string, string> = {};
+
+    switch (type) {
+      case "flash_borrow":
+        initialParams = { asset: "SUI", amount: "1000000000" };
+        break;
+      case "swap":
+        initialParams = { 
+          from: "SUI", 
+          to: "USDC", 
+          amount: "ALL",
+          pool_id: "0xcf994611fd4c48e277ce3ffd4d4364c914af2c3cbb05f7bf6facd371de688630" // Default Cetus Pool
+        };
+        break;
+      case "flash_repay":
+        initialParams = { asset: "SUI" };
+        break;
+    }
+
     const newBlock: Block = {
       id: uuidv4(),
       type,
-      params: { token: "SUI", amount: "" },
+      params: initialParams,
     };
     setBlocks(prev => [...prev, newBlock]);
     setSimulationResult(null);

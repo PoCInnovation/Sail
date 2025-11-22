@@ -83,24 +83,70 @@ export function BlockCard({
 
           {/* Inputs Grid */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-[9px] font-mono text-gray-500 uppercase tracking-widest">Asset</label>
-              <AssetSelector
-                value={block.params.token}
-                onChange={(value) => onUpdateParam(block.id, "token", value)}
-                tokenMap={tokenMap}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[9px] font-mono text-gray-500 uppercase tracking-widest">Amount</label>
-              <input
-                type="text"
-                value={block.params.amount}
-                onChange={(e) => onUpdateParam(block.id, "amount", e.target.value)}
-                placeholder="0.00"
-                className="w-full bg-[#0a0a0a] text-sm text-white font-mono px-3 py-2 border border-[#333] focus:border-gray-500 outline-none transition-colors placeholder-gray-800 text-right"
-              />
-            </div>
+            {block.type === "flash_borrow" && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-mono text-gray-500 uppercase tracking-widest">Asset</label>
+                  <AssetSelector
+                    value={block.params.asset}
+                    onChange={(value) => onUpdateParam(block.id, "asset", value)}
+                    tokenMap={tokenMap}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-mono text-gray-500 uppercase tracking-widest">Amount</label>
+                  <input
+                    type="text"
+                    value={block.params.amount}
+                    onChange={(e) => onUpdateParam(block.id, "amount", e.target.value)}
+                    placeholder="0.00"
+                    className="w-full bg-[#0a0a0a] text-sm text-white font-mono px-3 py-2 border border-[#333] focus:border-gray-500 outline-none transition-colors placeholder-gray-800 text-right"
+                  />
+                </div>
+              </>
+            )}
+
+            {block.type === "swap" && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-mono text-gray-500 uppercase tracking-widest">From</label>
+                  <AssetSelector
+                    value={block.params.from}
+                    onChange={(value) => onUpdateParam(block.id, "from", value)}
+                    tokenMap={tokenMap}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-mono text-gray-500 uppercase tracking-widest">To</label>
+                  <AssetSelector
+                    value={block.params.to}
+                    onChange={(value) => onUpdateParam(block.id, "to", value)}
+                    tokenMap={tokenMap}
+                  />
+                </div>
+                <div className="space-y-2 col-span-2">
+                  <label className="text-[9px] font-mono text-gray-500 uppercase tracking-widest">Amount</label>
+                  <input
+                    type="text"
+                    value={block.params.amount}
+                    onChange={(e) => onUpdateParam(block.id, "amount", e.target.value)}
+                    placeholder="ALL or Amount"
+                    className="w-full bg-[#0a0a0a] text-sm text-white font-mono px-3 py-2 border border-[#333] focus:border-gray-500 outline-none transition-colors placeholder-gray-800 text-right"
+                  />
+                </div>
+              </>
+            )}
+
+            {block.type === "flash_repay" && (
+              <div className="space-y-2 col-span-2">
+                <label className="text-[9px] font-mono text-gray-500 uppercase tracking-widest">Repay Asset</label>
+                <AssetSelector
+                  value={block.params.asset}
+                  onChange={(value) => onUpdateParam(block.id, "asset", value)}
+                  tokenMap={tokenMap}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
