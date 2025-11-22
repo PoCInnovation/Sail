@@ -3,7 +3,7 @@ import multer from 'multer';
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
 import { SealWalrusService } from '../../services/SealWalrusService';
 
-const router = Router();
+const router: Router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 // Initialize Sui client and service
