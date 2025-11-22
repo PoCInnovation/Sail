@@ -90,7 +90,7 @@ export function SimulationResults({ simulationResult, error, blocksCount }: Simu
                   Gas Estimate
                 </Typography>
                 <Typography className="font-mono text-lg text-blue-400 font-bold">
-                  {simulationResult?.estimated_gas}
+                  {simulationResult?.estimated_gas ? (simulationResult.estimated_gas / 1_000_000_000).toFixed(6) : '0'}
                 </Typography>
                 <Typography className="font-mono text-[10px] text-gray-600 mt-1">
                   SUI
@@ -115,18 +115,27 @@ export function SimulationResults({ simulationResult, error, blocksCount }: Simu
                 Balance Changes
               </Typography>
               <div className="space-y-2">
-                {simulationResult?.estimated_profit_loss.map((pnl, i) => (
-                  <div key={i} className="flex justify-between items-center py-2 border-b border-gray-800/50 last:border-0">
-                    <Typography className="font-mono text-sm text-gray-300">
-                      {pnl.token}
-                    </Typography>
-                    <Typography className={`font-mono text-sm font-bold ${
-                      parseFloat(pnl.amount) >= 0 ? 'text-emerald-400' : 'text-red-400'
-                    }`}>
-                      {parseFloat(pnl.amount) > 0 ? '+' : ''}{pnl.amount}
-                    </Typography>
-                  </div>
-                ))}
+                {simulationResult?.estimated_profit_loss.map((pnl, i) => {
+                  // Convert MIST to token amount (divide by 1_000_000_000)
+                  const amountInMist = parseFloat(pnl.amount);
+                  const amountInToken = amountInMist / 1_000_000_000;
+                  
+                  // Extract token symbol from coin_type (e.g., "0x2::sui::SUI" -> "SUI")
+                  const tokenSymbol = pnl.coin_type?.split('::').pop() || pnl.token || 'Unknown';
+                  
+                  return (
+                    <div key={i} className="flex justify-between items-center py-2 border-b border-gray-800/50 last:border-0">
+                      <Typography className="font-mono text-sm text-gray-300">
+                        {tokenSymbol}
+                      </Typography>
+                      <Typography className={`font-mono text-sm font-bold ${
+                        amountInToken >= 0 ? 'text-emerald-400' : 'text-red-400'
+                      }`}>
+                        {amountInToken > 0 ? '+' : ''}{amountInToken.toFixed(6)} {tokenSymbol}
+                      </Typography>
+                    </div>
+                  );
+                })}
                 {(!simulationResult?.estimated_profit_loss || simulationResult.estimated_profit_loss.length === 0) && (
                   <div className="text-center py-4">
                     <Typography className="font-mono text-xs text-gray-600 italic">

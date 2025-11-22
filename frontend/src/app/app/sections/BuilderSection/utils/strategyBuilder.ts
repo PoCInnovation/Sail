@@ -13,12 +13,12 @@ export function normalizeToken(input: string, tokenMap: Record<string, string>):
 
 export function normalizeAmount(amount: string): string {
   if (!amount) return "0";
-  // If amount seems small (like "1.5"), assume it needs decimal conversion (x 10^9 for SUI)
-  // This is a simplified heuristic for the hackathon
-  if (amount.includes(".") || parseFloat(amount) < 1000000) {
-    return Math.floor(parseFloat(amount) * 1_000_000_000).toString();
-  }
-  return amount;
+  
+  // Always treat input as SUI and convert to MIST (multiply by 10^9)
+  const amountInSui = parseFloat(amount);
+  if (isNaN(amountInSui)) return "0";
+  
+  return Math.floor(amountInSui * 1_000_000_000).toString();
 }
 
 export function buildStrategyFromBlocks(blocks: Block[], tokenMap: Record<string, string>, authorAddress: string) {
@@ -52,7 +52,7 @@ export function buildStrategyFromBlocks(blocks: Block[], tokenMap: Record<string
     
     if (block.type === "flash_borrow") {
       const asset = normalizeToken(block.params.asset, tokenMap);
-      const amount = block.params.amount || "0";
+      const amount = normalizeAmount(block.params.amount || "0");
 
       nodes.push({
         id: nodeId,

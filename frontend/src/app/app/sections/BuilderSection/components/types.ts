@@ -11,7 +11,7 @@ export interface Block {
 export interface SimulationResult {
   success: boolean;
   estimated_gas: number;
-  estimated_profit_loss: Array<{ token: string; amount: string }>;
+  estimated_profit_loss: Array<{ token?: string; amount: string; coin_type?: string }>;
   errors: Array<{ message: string }>;
 }
 

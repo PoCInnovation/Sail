@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export const api = {
   getTokens: async () => {
@@ -13,6 +13,10 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ strategy }),
     });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Validation failed: ${res.status} - ${text}`);
+    }
     return res.json();
   },
 
@@ -22,6 +26,10 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ strategy, sender }),
     });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Simulation failed: ${res.status} - ${text}`);
+    }
     return res.json();
   }
 };

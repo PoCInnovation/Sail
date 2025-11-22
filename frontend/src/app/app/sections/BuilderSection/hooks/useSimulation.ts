@@ -27,6 +27,9 @@ export function useSimulation({ blocks, tokenMap, senderAddress, onSuccess }: Us
     try {
       // Build strategy from blocks
       const strategy = buildStrategyFromBlocks(blocks, tokenMap, senderAddress);
+      
+      // Debug: log the generated strategy
+      console.log("Generated Strategy JSON:", JSON.stringify(strategy, null, 2));
 
       // 1. Validate
       const validateData = await api.validateStrategy(strategy);
