@@ -5,9 +5,9 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export const ADMIN_CONFIG = {
-  PACKAGE_ID: process.env.PACKAGE_ID || '0x0fe074f026b27ea8617d326dc732b635a762bb64e23b943bafc7ac49f8e9eb52',
-  WHITELIST_ID: process.env.WHITELIST_ID || '0x7d4fdefe79f2b7332672e2289b331dcc445a47d2379a39bed95adbe91e5fcc7d',
-  CAP_ID: process.env.CAP_ID || '0xcc9cb3bedca6f9e34f69420832b18cc24887dea30fe6616feec08113769051c5',
+  PACKAGE_ID: process.env.PACKAGE_ID || '',
+  WHITELIST_ID: process.env.WHITELIST_ID || '',
+  CAP_ID: process.env.CAP_ID || '',
 };
 
 /**

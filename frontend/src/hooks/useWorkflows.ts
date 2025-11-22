@@ -13,7 +13,6 @@ export interface WorkflowMetadata {
   author: string;
   description: string;
   tags: string[];
-  price_sui: number;
   created_at: number;
   purchaseCount: number;
   createdAt: number;
