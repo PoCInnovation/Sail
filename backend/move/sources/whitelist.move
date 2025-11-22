@@ -7,6 +7,9 @@ module startHack::whitelist {
     use sui::sui::SUI;
     use sui::balance::{Self, Balance};
 
+    use std::string::String;
+    // use std::vector; // Implicitly available
+
     const ENoAccess: u64 = 1;
     const EInvalidCap: u64 = 2;
     const EDuplicate: u64 = 3;
@@ -17,12 +20,23 @@ module startHack::whitelist {
     const VERSION: u64 = 1;
     const WHITELIST_PRICE: u64 = 500_000_000; // 0.5 SUI in MIST
 
+    public struct Template has store, drop {
+        id: ID,
+        name: String,
+        author: address,
+        description: String,
+        price: u64,
+        metadata_blob_id: String,
+        data_blob_id: String,
+    }
+
     public struct Whitelist has key {
         id: UID,
         version: u64,
         addresses: table::Table<address, bool>,
         balance: Balance<SUI>,
         beneficiary: address,
+        templates: vector<Template>,
     }
 
     public struct Cap has key, store {
@@ -37,6 +51,7 @@ module startHack::whitelist {
             addresses: table::new(ctx),
             balance: balance::zero(),
             beneficiary,
+            templates: vector::empty(),
         };
         let cap = Cap {
             id: object::new(ctx),
@@ -81,6 +96,41 @@ module startHack::whitelist {
         assert!(cap.wl_id == object::id(wl), EInvalidCap);
         assert!(!wl.addresses.contains(account), EDuplicate);
         wl.addresses.add(account, true);
+    }
+
+    /// Add a template to the marketplace (admin only for now, or anyone?)
+    /// For now, let's restrict to admin via Cap to prevent spam, or allow anyone?
+    /// The user said "saving it in a list in the contract", usually implies the uploader does it.
+    /// But the backend currently uploads. The backend has the admin key (maybe).
+    /// Let's make it admin-only for now as per the current architecture where backend manages uploads.
+    public entry fun add_template(
+        wl: &mut Whitelist, 
+        cap: &Cap,
+        name: String,
+        author: address,
+        description: String,
+        price: u64,
+        metadata_blob_id: String,
+        data_blob_id: String,
+        ctx: &mut TxContext
+    ) {
+        assert!(cap.wl_id == object::id(wl), EInvalidCap);
+        
+        let uid = object::new(ctx);
+        let id = object::uid_to_inner(&uid);
+        object::delete(uid);
+
+        let template = Template {
+            id,
+            name,
+            author,
+            description,
+            price,
+            metadata_blob_id,
+            data_blob_id,
+        };
+        
+        wl.templates.push_back(template);
     }
 
     /// Withdraw collected funds (admin only)

@@ -167,6 +167,35 @@ router.post('/seal/build-whitelist-payment', async (req: Request, res: Response)
     const WHITELIST_PRICE_SUI = 0.5;
     const WHITELIST_PRICE_MIST = 500_000_000; // 0.5 SUI
 
+    // Check if user is already whitelisted
+    try {
+      const whitelistObj = await suiClient.getObject({
+        id: ADMIN_CONFIG.WHITELIST_ID,
+        options: { showContent: true },
+      });
+
+      if (whitelistObj.data?.content?.dataType === 'moveObject') {
+        const content = whitelistObj.data.content as any;
+        const addressesTableId = content.fields.addresses.fields.id.id;
+
+        const dynamicField = await suiClient.getDynamicFieldObject({
+          parentId: addressesTableId,
+          name: {
+            type: 'address',
+            value: address,
+          },
+        });
+
+        if (dynamicField.data) {
+          return res.status(400).json({
+            error: 'User is already in the whitelist',
+          });
+        }
+      }
+    } catch (e) {
+      // Ignore error if dynamic field not found (means user is not whitelisted)
+    }
+
     console.log('💰 Building whitelist payment transaction:');
     console.log('   User:', address);
     console.log('   Price:', WHITELIST_PRICE_SUI, 'SUI');
