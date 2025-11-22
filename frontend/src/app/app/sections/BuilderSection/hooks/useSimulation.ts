@@ -28,7 +28,7 @@ export function useSimulation({ blocks, tokenMap, senderAddress, onSuccess }: Us
       const strategy = buildStrategyFromBlocks(blocks, tokenMap, senderAddress);
 
       // 1. Validate
-      const validateRes = await fetch("http://localhost:3000/api/validate", {
+      const validateRes = await fetch("http://localhost:8000/api/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ strategy }),
@@ -41,7 +41,7 @@ export function useSimulation({ blocks, tokenMap, senderAddress, onSuccess }: Us
       }
 
       // 2. Simulate
-      const simulateRes = await fetch("http://localhost:3000/api/simulate", {
+      const simulateRes = await fetch("http://localhost:8000/api/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 

@@ -4,7 +4,7 @@ export function useTokens() {
   const [tokenMap, setTokenMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    fetch("http://localhost:3000/api/tokens")
+    fetch("http://localhost:8000/api/tokens")
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
