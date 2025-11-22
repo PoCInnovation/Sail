@@ -3,10 +3,10 @@ import { Router, Request, Response } from 'express';
 import { Simulator } from '../../core/simulator';
 import { Strategy } from '../../types/strategy';
 
-const router = Router();
+const router: Router = Router();
 
-// Initialize simulator with Testnet by default (can be configured via env)
-const simulator = new Simulator('testnet'); // Using testnet as default for testing
+// Initialize simulator with Mainnet
+const simulator = new Simulator('mainnet');
 
 router.post('/simulate', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -40,4 +40,3 @@ router.post('/simulate', async (req: Request, res: Response): Promise<void> => {
 });
 
 export default router;
-

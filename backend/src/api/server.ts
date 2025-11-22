@@ -5,6 +5,7 @@ import bodyParser from 'body-parser';
 import simulationRoutes from './routes/simulation';
 import validateRoutes from './routes/validate';
 import sealRoutes from './routes/seal';
+import buildRoutes from './routes/build';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -17,6 +18,7 @@ app.use(bodyParser.json());
 app.use('/api', simulationRoutes);
 app.use('/api', validateRoutes);
 app.use('/api', sealRoutes);
+app.use('/api', buildRoutes);
 
 // Health Check
 app.get('/api/health', (req, res) => {

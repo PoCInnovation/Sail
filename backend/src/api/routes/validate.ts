@@ -3,7 +3,7 @@ import { Router, Request, Response } from 'express';
 import { TransactionBuilder } from '../../core/transaction-builder';
 import { Strategy } from '../../types/strategy';
 
-const router = Router();
+const router: Router = Router();
 
 router.post('/validate', (req: Request, res: Response): void => {
   try {
@@ -38,4 +38,3 @@ router.post('/validate', (req: Request, res: Response): void => {
 });
 
 export default router;
-
