@@ -124,7 +124,7 @@ router.post('/seal/session-message', async (req: Request, res: Response) => {
     
     const sessionKey = await SessionKey.create({
       address,
-      packageId: '0x62d5d773ee18880e3ec80a8f6beaee30e1cd961cbbf4c712959ce63f9893fd88',
+      packageId: '0x0fe074f026b27ea8617d326dc732b635a762bb64e23b943bafc7ac49f8e9eb52',
       ttlMin: 10,
       suiClient,
     });

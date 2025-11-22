@@ -10,8 +10,8 @@
     "test": "jest",
     "lint": "eslint src --ext .ts",
     "start": "node dist/api/server.js",
-    "start:api": "tsx src/api/server.ts",
-    "start:dev": "tsx watch src/api/server.ts"
+    "start:api": "pnpm exec tsx src/api/server.ts",
+    "start:dev": "pnpm exec tsx watch src/api/server.ts"
   },
   "keywords": [
     "sui",
@@ -46,6 +46,7 @@
     "@typescript-eslint/parser": "^8.15.0",
     "eslint": "^9.16.0",
     "ts-node": "^10.9.2",
+    "tsx": "^4.20.6",
     "typescript": "^5.7.2"
   }
 }

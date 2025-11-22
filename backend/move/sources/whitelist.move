@@ -52,6 +52,13 @@ module startHack::whitelist {
         wl.addresses.add(account, true);
     }
 
+    /// Allow anyone to add themselves to the whitelist (for marketplace purchase)
+    entry fun add_self(wl: &mut Whitelist, ctx: &TxContext) {
+        let sender = ctx.sender();
+        assert!(!wl.addresses.contains(sender), EDuplicate);
+        wl.addresses.add(sender, true);
+    }
+
     public fun remove(wl: &mut Whitelist, cap: &Cap, account: address) {
         assert!(cap.wl_id == object::id(wl), EInvalidCap);
         assert!(wl.addresses.contains(account), ENotInWhitelist);

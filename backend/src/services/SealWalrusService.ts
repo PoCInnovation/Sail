@@ -3,8 +3,8 @@ import { SuiClient } from '@mysten/sui/client';
 import { Transaction } from '@mysten/sui/transactions';
 import { fromHex } from '@mysten/sui/utils';
 
-const PACKAGE_ID = '0x62d5d773ee18880e3ec80a8f6beaee30e1cd961cbbf4c712959ce63f9893fd88';
-const WHITELIST_ID = '0x63090ed01c52e4963a31a6b27e91f5608bd297b1b3a5b3e63e4d8191540251be';
+const PACKAGE_ID = '0x0fe074f026b27ea8617d326dc732b635a762bb64e23b943bafc7ac49f8e9eb52';
+const WHITELIST_ID = '0x7d4fdefe79f2b7332672e2289b331dcc445a47d2379a39bed95adbe91e5fcc7d';
 const PUBLISHER = 'https://publisher.walrus-testnet.walrus.space';
 const AGGREGATOR = 'https://aggregator.walrus-testnet.walrus.space';
 
@@ -109,17 +109,15 @@ export class SealWalrusService {
    */
   async decryptFromWalrus(
     metadataBlobId: string,
-    address: string,
-    signPersonalMessage: (message: Uint8Array) => Promise<string>
+    sessionKey: SessionKey,
+    signature: string,
+    address: string
   ): Promise<Buffer> {
-    // Fetch metadata from Walrus
-    const metadataResponse = await fetch(`${AGGREGATOR}/v1/blobs/${metadataBlobId}`);
-    if (!metadataResponse.ok) {
-      throw new Error(`Failed to fetch metadata: ${metadataResponse.status}`);
-    }
+    // Set signature on session key
+    sessionKey.setPersonalMessageSignature(signature);
 
-    const metadataBytes = await metadataResponse.arrayBuffer();
-    const metadata: Metadata = JSON.parse(new TextDecoder().decode(metadataBytes));
+    // Fetch metadata from Walrus
+    const metadata = await this.getMetadata(metadataBlobId);
 
     // Fetch encrypted data from Walrus
     const dataResponse = await fetch(`${AGGREGATOR}/v1/blobs/${metadata.dataBlobId}`);
@@ -128,18 +126,6 @@ export class SealWalrusService {
     }
 
     const encryptedObject = new Uint8Array(await dataResponse.arrayBuffer());
-
-    // Create session key
-    const sessionKey = await SessionKey.create({
-      address,
-      packageId: metadata.packageId,
-      ttlMin: 10,
-      suiClient: this.suiClient,
-    });
-
-    const personalMessage = sessionKey.getPersonalMessage();
-    const signature = await signPersonalMessage(personalMessage);
-    sessionKey.setPersonalMessageSignature(signature);
 
     // Build ID for policy
     const cleanWhitelistId = metadata.whitelistId.startsWith('0x') 
@@ -175,15 +161,27 @@ export class SealWalrusService {
   }
 
   /**
+   * Create a session key for decryption
+   */
+  async createSessionKey(address: string): Promise<SessionKey> {
+    return await SessionKey.create({
+      address,
+      packageId: PACKAGE_ID,
+      ttlMin: 10,
+      suiClient: this.suiClient,
+    });
+  }
+
+  /**
    * Get metadata from Walrus
    */
   async getMetadata(metadataBlobId: string): Promise<Metadata> {
-    const response = await fetch(`${AGGREGATOR}/v1/blobs/${metadataBlobId}`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch metadata: ${response.status}`);
+    const metadataResponse = await fetch(`${AGGREGATOR}/v1/blobs/${metadataBlobId}`);
+    if (!metadataResponse.ok) {
+      throw new Error(`Failed to fetch metadata: ${metadataResponse.status}`);
     }
 
-    const metadataBytes = await response.arrayBuffer();
+    const metadataBytes = await metadataResponse.arrayBuffer();
     return JSON.parse(new TextDecoder().decode(metadataBytes));
   }
 }
