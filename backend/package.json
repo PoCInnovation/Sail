@@ -8,25 +8,40 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "jest",
-    "lint": "eslint src --ext .ts"
+    "lint": "eslint src --ext .ts",
+    "start:api": "ts-node src/api/server.ts"
   },
-  "keywords": ["sui", "flash-loan", "ptb", "defi", "arbitrage"],
+  "keywords": [
+    "sui",
+    "flash-loan",
+    "ptb",
+    "defi",
+    "arbitrage"
+  ],
   "author": "",
   "license": "MIT",
   "packageManager": "pnpm@10.17.0",
   "dependencies": {
-    "@mysten/sui": "^1.14.0",
-    "navi-sdk": "^1.2.2",
     "@cetusprotocol/cetus-sui-clmm-sdk": "^4.1.0",
-    "zod": "^3.23.8",
-    "uuid": "^11.0.3"
+    "@mysten/sui": "^1.14.0",
+    "body-parser": "^2.2.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "navi-sdk": "^1.2.2",
+    "uuid": "^11.0.3",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/body-parser": "^1.19.6",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.5",
     "@types/node": "^22.10.1",
     "@types/uuid": "^10.0.0",
-    "typescript": "^5.7.2",
-    "eslint": "^9.16.0",
     "@typescript-eslint/eslint-plugin": "^8.15.0",
-    "@typescript-eslint/parser": "^8.15.0"
+    "@typescript-eslint/parser": "^8.15.0",
+    "eslint": "^9.16.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
   }
 }
