@@ -139,7 +139,9 @@ export function useWorkflowActions() {
       });
 
       if (!paymentResult.effects || paymentResult.effects.status.status !== 'success') {
-        throw new Error('Payment transaction failed');
+        const errorDetail = paymentResult.effects?.status.error || 'Unknown error';
+        console.error('❌ Transaction failed on-chain:', errorDetail);
+        throw new Error(`Payment transaction failed: ${errorDetail}`);
       }
 
       console.log('✅ Payment successful! TX:', paymentResult.digest);
@@ -279,10 +281,12 @@ export function useWorkflowActions() {
       });
 
       const decryptResult = await decryptResponse.json();
-      
+
       if (!decryptResult.success) {
         console.error('❌ Decrypt failed:', decryptResult);
-        throw new Error(decryptResult.error || 'Decryption failed');
+        // Show the backend's detailed message if available
+        const errorMsg = decryptResult.message || decryptResult.error || 'Decryption failed';
+        throw new Error(errorMsg);
       }
 
       console.log('✅ Workflow decrypted successfully!');
