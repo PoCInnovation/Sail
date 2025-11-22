@@ -73,10 +73,15 @@ router.post('/workflows/upload', async (req: Request, res: Response) => {
     res.json({
       success: true,
       data: {
+        id: strategy.id,
         workflowId: strategy.id,
         metadataBlobId: result.metadataBlobId,
         dataBlobId: result.dataBlobId,
-        walrusUrl: `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${result.metadataBlobId}`,
+        price_sui: strategy.meta.price_sui || 0.1,
+        walrusUrls: {
+          metadata: `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${result.metadataBlobId}`,
+          data: `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${result.dataBlobId}`,
+        },
       },
     });
   } catch (error: any) {
