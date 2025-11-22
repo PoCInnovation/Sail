@@ -1,26 +1,79 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { Box, Grid } from "@mui/material";
+import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useTokens } from "./hooks/useTokens";
+import { useBlocks } from "./hooks/useBlocks";
+import { useSimulation } from "./hooks/useSimulation";
+import { BlockPalette } from "./components/BlockPalette";
+import { Canvas } from "./components/Canvas";
+import { SimulationResults } from "./components/SimulationResults";
+import { BuilderHeader } from "./components/BuilderHeader";
 
 export function BuilderSection() {
+  const currentAccount = useCurrentAccount();
+  const tokenMap = useTokens();
+  
+  const {
+    blocks,
+    simulationResult,
+    setSimulationResult,
+    addBlock,
+    removeBlock,
+    updateBlockParam,
+    clearBlocks,
+  } = useBlocks();
+
+  const {
+    isSimulating,
+    error,
+    runSimulation,
+    setError,
+  } = useSimulation({
+    blocks,
+    tokenMap,
+    senderAddress: currentAccount?.address || "",
+    onSuccess: setSimulationResult,
+  });
+
+  const handleClear = () => {
+    clearBlocks();
+    setError(null);
+  };
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-    >
-      <div className="space-y-6">
-        <h1 className="text-4xl md:text-6xl font-pixel text-white tracking-wider">
-          BLOCK BUILDER
-        </h1>
-        <div className="pt-8">
-          <div className="bg-walrus-mint/10 border-4 border-walrus-mint/40 p-8">
-            <p className="text-white font-pixel text-sm">
-              BLOCK BUILDER COMING SOON
-            </p>
-          </div>
-        </div>
-      </div>
-    </motion.div>
+    <Box className="h-full mt-12 flex flex-col gap-6">
+      <BuilderHeader
+        onClear={handleClear}
+        onRunSimulation={runSimulation}
+        isSimulating={isSimulating}
+        hasBlocks={blocks.length > 0}
+      />
+
+      <Grid container spacing={4} className="flex-1 min-h-0">
+        {/* Left Panel: Canvas */}
+        <Grid size={{ xs: 12, md: 8 }} className="flex flex-col gap-4 h-full overflow-hidden">
+          {/* Block Palette */}
+          <BlockPalette onAddBlock={addBlock} />
+
+          {/* Canvas Area */}
+          <Canvas
+            blocks={blocks}
+            tokenMap={tokenMap}
+            onRemoveBlock={removeBlock}
+            onUpdateBlockParam={updateBlockParam}
+          />
+        </Grid>
+
+        {/* Right Panel: Simulation Results */}
+        <Grid size={{ xs: 12, md: 4 }} className="h-full">
+          <SimulationResults
+            simulationResult={simulationResult}
+            error={error}
+            blocksCount={blocks.length}
+          />
+        </Grid>
+      </Grid>
+    </Box>
   );
 }

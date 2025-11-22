@@ -7,7 +7,7 @@ import { AppSidebar } from "./components/AppSidebar";
 import { TopBar } from "./components/TopBar";
 import { setWalletCookie, getWalletCookie } from "@/lib/cookieUtils";
 import { DashboardSection } from "./sections/DashboardSection";
-import { BuilderSection } from "./sections/BuilderSection";
+import { BuilderSection } from "./sections/BuilderSection/index";
 import { MarketplaceSection } from "./sections/MarketplaceSection";
 import { TemplatesSection } from "./sections/TemplatesSection";
 import { HistorySection } from "./sections/HistorySection";
@@ -35,9 +35,9 @@ export default function AppLayout({
     checkMobile();
     window.addEventListener('resize', checkMobile);
 
-    // Determine if we have a persisted wallet session (cookie or localStorage)
-    const hasSession = typeof window !== 'undefined' &&
-      (localStorage.getItem('sui_wallet') || getWalletCookie());
+    // Determine if we have a persisted wallet session (cookie or dapp-kit localStorage)
+    // dapp-kit stores wallet info in localStorage with various keys, so we check our cookie
+    const hasSession = typeof window !== 'undefined' && getWalletCookie();
     // Shorter loading: 0.5s if session, 0.1s otherwise
     const loadingDuration = hasSession ? 500 : 100;
 

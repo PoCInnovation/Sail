@@ -3,7 +3,7 @@ import { Router, Request, Response } from 'express';
 import { Simulator } from '../../core/simulator';
 import { Strategy } from '../../types/strategy';
 
-const router = Router();
+const router: Router = Router();
 
 // Initialize simulator with Testnet by default (can be configured via env)
 const simulator = new Simulator('testnet'); // Using testnet as default for testing
