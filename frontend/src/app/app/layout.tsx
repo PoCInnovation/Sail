@@ -186,7 +186,7 @@ export default function AppLayout({
           }}
         >
           {activeSection === 'dashboard' && <DashboardSection />}
-          {activeSection === 'builder' && <BuilderSection />}
+          {activeSection === 'builder' && <BuilderSection onNavigate={setActiveSection} />}
           {activeSection === 'marketplace' && <MarketplaceSection />}
           {activeSection === 'templates' && <TemplatesSection />}
           {activeSection === 'history' && <HistorySection />}

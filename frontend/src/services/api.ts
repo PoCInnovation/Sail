@@ -31,5 +31,19 @@ export const api = {
       throw new Error(`Simulation failed: ${res.status} - ${text}`);
     }
     return res.json();
+    return res.json();
+  },
+
+  buildTransaction: async (strategy: any, sender: string) => {
+    const res = await fetch(`${API_BASE_URL}/api/build`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ strategy, sender }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Build failed: ${res.status} - ${text}`);
+    }
+    return res.json();
   }
 };

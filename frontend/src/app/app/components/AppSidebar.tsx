@@ -35,7 +35,7 @@ const navItems: NavItem[] = [
   { id: "dashboard", label: "Dashboard", icon: <DashboardIcon /> },
   { id: "builder", label: "Block Builder", icon: <WorkflowIcon /> },
   { id: "marketplace", label: "Marketplace", icon: <MarketplaceIcon />},
-  { id: "templates", label: "Templates", icon: <TemplatesIcon /> },
+  { id: "templates", label: "Strategy Folder", icon: <TemplatesIcon /> },
   { id: "history", label: "History", icon: <HistoryIcon /> },
   { id: "settings", label: "Settings", icon: <SettingsIcon /> },
 ];
