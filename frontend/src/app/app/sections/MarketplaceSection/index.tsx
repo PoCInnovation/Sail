@@ -7,36 +7,12 @@ import { useCurrentAccount } from "@mysten/dapp-kit";
 
 export function MarketplaceSection() {
   const { workflows, loading, error } = useWorkflows();
-  const { purchaseWorkflow, decryptWorkflow, payForWhitelist } = useWorkflowActions();
+  const { purchaseTemplateAccess, decryptWorkflow } = useWorkflowActions();
   const currentAccount = useCurrentAccount();
   const [purchasing, setPurchasing] = useState<string | null>(null);
-  const [payingWhitelist, setPayingWhitelist] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
 
-  const handleWhitelistPayment = async () => {
-    if (!currentAccount) {
-      setMessage({ type: 'error', text: 'Please connect your wallet first' });
-      return;
-    }
-
-    setPayingWhitelist(true);
-    setMessage(null);
-
-    try {
-      await payForWhitelist();
-      
-      setMessage({ 
-        type: 'success', 
-        text: 'Successfully added to whitelist! You can now purchase workflows.' 
-      });
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message });
-    } finally {
-      setPayingWhitelist(false);
-    }
-  };
-
-  const handlePurchase = async (workflowId: string) => {
+  const handlePurchase = async (workflowId: string, templateIndex: number, templateName: string, priceSui: number) => {
     if (!currentAccount) {
       setMessage({ type: 'error', text: 'Please connect your wallet first' });
       return;
@@ -46,22 +22,25 @@ export function MarketplaceSection() {
     setMessage(null);
 
     try {
-      // Acheter le workflow (juste marque comme possédé)
-      await purchaseWorkflow(workflowId);
-      
+      // 1. Purchase template access (on-chain payment)
       setMessage({
-        type: 'success',
-        text: 'Downloading workflow... (check wallet for signature request)'
+        type: 'info',
+        text: `Purchasing access for ${priceSui} SUI... (check wallet for signature request)`
       });
 
-      // Décrypter et sauvegarder dans localStorage (seal_approve vérifie whitelist)
+      await purchaseTemplateAccess(templateIndex, templateName, priceSui);
+
+      setMessage({
+        type: 'success',
+        text: 'Access purchased! Now downloading workflow...'
+      });
+
+      // 2. Decrypt and save workflow (Seal will verify template-specific access on-chain)
       const decryptedWorkflow = await decryptWorkflow(workflowId);
-      
-      // Récupérer les workflows existants
+
+      // Save to localStorage
       const existingWorkflows = localStorage.getItem('purchased_workflows');
       const workflows = existingWorkflows ? JSON.parse(existingWorkflows) : [];
-      
-      // Ajouter le nouveau workflow
       workflows.push(decryptedWorkflow);
       localStorage.setItem('purchased_workflows', JSON.stringify(workflows));
 
@@ -70,11 +49,16 @@ export function MarketplaceSection() {
         text: 'Workflow downloaded and saved to your templates!'
       });
     } catch (err: any) {
-      // Check if error is about whitelist
-      if (err.message?.includes('whitelist') || err.message?.includes('not authorized')) {
-        setMessage({ 
-          type: 'error', 
-          text: 'You must be in the whitelist to decrypt workflows. Please pay 0.5 SUI first.' 
+      // Check for specific errors
+      if (err.message?.includes('access') || err.message?.includes('not authorized')) {
+        setMessage({
+          type: 'error',
+          text: 'Access denied. You need to purchase this template first.'
+        });
+      } else if (err.message?.includes('Duplicate')) {
+        setMessage({
+          type: 'error',
+          text: 'You already own this template!'
         });
       } else {
         setMessage({ type: 'error', text: err.message });
@@ -127,14 +111,6 @@ export function MarketplaceSection() {
           <h1 className="text-4xl font-pixel text-white tracking-wider">
             MARKETPLACE
           </h1>
-          
-          <button
-            onClick={handleWhitelistPayment}
-            disabled={payingWhitelist || !currentAccount}
-            className="px-6 py-3 bg-walrus-mint/20 border-4 border-walrus-mint hover:bg-walrus-mint hover:text-black transition-colors font-pixel text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {payingWhitelist ? 'PROCESSING...' : 'PAY 0.5 SUI FOR WHITELIST'}
-          </button>
         </div>
         <p className="text-gray-500 font-mono text-sm">
           Discover and download DeFi strategies
@@ -143,8 +119,7 @@ export function MarketplaceSection() {
 
       <div className="bg-walrus-mint/10 border-2 border-walrus-mint/40 p-4 mb-6">
           <p className="text-white/80 text-xs font-mono">
-            ℹ️ To purchase and decrypt workflows, you must first pay 0.5 SUI to join the whitelist.
-            This is a one-time payment that gives you access to decrypt all workflows you purchase.
+            ℹ️ Each template has its own price. When you purchase a template, you get permanent access to decrypt and use it.
           </p>
         </div>
 
@@ -169,7 +144,7 @@ export function MarketplaceSection() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {workflows.map((workflow) => (
+              {workflows.map((workflow, index) => (
                 <motion.div
                   key={workflow.id}
                   initial={{ opacity: 0, scale: 0.9 }}
@@ -180,14 +155,14 @@ export function MarketplaceSection() {
                   <h3 className="text-2xl font-pixel text-walrus-mint mb-4">
                     {workflow.name}
                   </h3>
-                  
+
                   <div className="space-y-2 mb-4">
                     <p className="text-white/80 text-sm font-mono">
                       {workflow.description}
                     </p>
-                    
+
                     <div className="flex flex-wrap gap-2 mt-2">
-                      {workflow.tags.map((tag) => (
+                      {workflow.tags?.map((tag) => (
                         <span
                           key={tag}
                           className="px-2 py-1 bg-walrus-mint/20 border border-walrus-mint/40 text-walrus-mint text-xs font-pixel"
@@ -200,19 +175,22 @@ export function MarketplaceSection() {
                     <p className="text-white/60 text-xs font-mono mt-2">
                       By: {workflow.author.slice(0, 8)}...{workflow.author.slice(-6)}
                     </p>
-                    
+
                     <p className="text-walrus-mint text-sm font-pixel">
-                      {workflow.purchaseCount} purchases
+                      {workflow.purchaseCount || 0} purchases
                     </p>
                   </div>
 
-                  <div className="flex justify-end items-center pt-4 border-t border-walrus-mint/20">
+                  <div className="flex justify-between items-center pt-4 border-t border-walrus-mint/20">
+                    <div className="text-white font-pixel text-xl">
+                      {workflow.price_sui} SUI
+                    </div>
                     <button
-                      onClick={() => handlePurchase(workflow.id)}
+                      onClick={() => handlePurchase(workflow.id, index, workflow.name, workflow.price_sui)}
                       disabled={purchasing === workflow.id}
                       className="px-6 py-2 bg-walrus-mint/20 border-2 border-walrus-mint hover:bg-walrus-mint hover:text-black transition-colors font-pixel text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {purchasing === workflow.id ? 'DOWNLOADING...' : 'DOWNLOAD FREE'}
+                      {purchasing === workflow.id ? 'PURCHASING...' : 'BUY'}
                     </button>
                   </div>
                 </motion.div>

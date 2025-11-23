@@ -50,57 +50,90 @@ router.post('/workflows/upload', async (req: Request, res: Response) => {
     const workflowJson = JSON.stringify(strategy);
     const workflowBuffer = Buffer.from(workflowJson, 'utf-8');
 
-    console.log('📤 Uploading workflow to Walrus (encrypted):', strategy.meta.name);
+    const adminKeypair = getAdminKeypair();
+    if (!adminKeypair) {
+      throw new Error('Admin keypair not found - cannot create template');
+    }
 
-    // Encrypt et stocker sur Walrus
+    // STEP 1: Create placeholder template on-chain to get template ID
+    console.log('🔗 Creating template placeholder on-chain...');
+    const placeholderTx = new Transaction();
+    placeholderTx.moveCall({
+      target: `${ADMIN_CONFIG.PACKAGE_ID}::whitelist::create_template_placeholder`,
+      arguments: [
+        placeholderTx.object(ADMIN_CONFIG.WHITELIST_ID),
+        placeholderTx.object(ADMIN_CONFIG.CAP_ID),
+        placeholderTx.pure.string(strategy.meta.name),
+        placeholderTx.pure.address(strategy.meta.author),
+        placeholderTx.pure.string(strategy.meta.description),
+        placeholderTx.pure.u64(BigInt(strategy.meta.price_sui * 1_000_000_000)), // Convert to MIST
+      ],
+    });
+
+    const placeholderResult = await suiClient.signAndExecuteTransaction({
+      signer: adminKeypair,
+      transaction: placeholderTx,
+      options: {
+        showEffects: true,
+        showEvents: true,
+      },
+    });
+
+    if (placeholderResult.effects?.status.status !== 'success') {
+      throw new Error(`Failed to create template placeholder: ${placeholderResult.effects?.status.error}`);
+    }
+
+    // Extract the template ID from the TemplateCreated event
+    const events = placeholderResult.events || [];
+    const templateCreatedEvent = events.find((e: any) =>
+      e.type.includes('::whitelist::TemplateCreated')
+    );
+
+    if (!templateCreatedEvent) {
+      console.error('❌ No TemplateCreated event found in transaction');
+      console.error('Events:', JSON.stringify(events, null, 2));
+      throw new Error('Failed to extract template ID from transaction - no TemplateCreated event');
+    }
+
+    const eventData = templateCreatedEvent.parsedJson as { template_id: string };
+    const extractedTemplateId = eventData.template_id;
+    console.log('✅ Template placeholder created with ID:', extractedTemplateId);
+
+    // STEP 2: Encrypt and upload to Walrus with template ID
+    console.log('📤 Uploading workflow to Walrus (encrypted with template ID):', strategy.meta.name);
     const result = await sealWalrusService.encryptAndStore(
       workflowBuffer,
+      extractedTemplateId,
       `${strategy.meta.name}.json`
     );
 
-    // Ajouter à la marketplace
-    const marketplaceEntry: MarketplaceWorkflow = {
-      id: strategy.id,
-      metadataBlobId: result.metadataBlobId,
-      strategy,
-      purchasedBy: [],
-      createdAt: Date.now(),
-    };
+    // STEP 3: Update template with blob IDs
+    console.log('🔗 Updating template with blob IDs...');
+    const updateTx = new Transaction();
+    updateTx.moveCall({
+      target: `${ADMIN_CONFIG.PACKAGE_ID}::whitelist::update_template_blobs`,
+      arguments: [
+        updateTx.object(ADMIN_CONFIG.WHITELIST_ID),
+        updateTx.object(ADMIN_CONFIG.CAP_ID),
+        updateTx.pure.id(extractedTemplateId),
+        updateTx.pure.string(result.metadataBlobId),
+        updateTx.pure.string(result.dataBlobId),
+      ],
+    });
 
-    // Add to marketplace on-chain
-    const adminKeypair = getAdminKeypair();
-    if (adminKeypair) {
-      console.log('🔗 Adding template to on-chain whitelist...');
-      const tx = new Transaction();
-      tx.moveCall({
-        target: `${ADMIN_CONFIG.PACKAGE_ID}::whitelist::add_template`,
-        arguments: [
-          tx.object(ADMIN_CONFIG.WHITELIST_ID),
-          tx.object(ADMIN_CONFIG.CAP_ID),
-          tx.pure.string(strategy.meta.name),
-          tx.pure.address(strategy.meta.author),
-          tx.pure.string(strategy.meta.description),
-          tx.pure.u64(BigInt(strategy.meta.price_sui * 1_000_000_000)), // Convert to MIST
-          tx.pure.string(result.metadataBlobId),
-          tx.pure.string(result.dataBlobId),
-        ],
-      });
+    const updateResult = await suiClient.signAndExecuteTransaction({
+      signer: adminKeypair,
+      transaction: updateTx,
+      options: {
+        showEffects: true,
+      },
+    });
 
-      const txResult = await suiClient.signAndExecuteTransaction({
-        signer: adminKeypair,
-        transaction: tx,
-        options: {
-          showEffects: true,
-        },
-      });
-
-      if (txResult.effects?.status.status !== 'success') {
-        throw new Error(`Failed to add template on-chain: ${txResult.effects?.status.error}`);
-      }
-      console.log('✅ Template added on-chain:', txResult.digest);
-    } else {
-      console.warn('⚠️  Admin keypair not found - skipping on-chain registration');
+    if (updateResult.effects?.status.status !== 'success') {
+      throw new Error(`Failed to update template blobs: ${updateResult.effects?.status.error}`);
     }
+
+    console.log('✅ Template updated with blob IDs:', updateResult.digest);
 
     // marketplaceWorkflows.push(marketplaceEntry); // Removed
 
@@ -151,19 +184,60 @@ router.get('/workflows/list', async (req: Request, res: Response) => {
     // The fields structure depends on the Move struct definition
     const content = whitelistObj.data.content as any;
     const templates = content.fields.templates || [];
-    
+    const templateAccessTableId = content.fields.template_access.fields.id.id;
+
     console.log('📋 On-chain templates:', JSON.stringify(templates, null, 2));
 
-    const workflows = templates.map((t: any) => ({
-      id: t.fields.id,
-      metadataBlobId: t.fields.metadata_blob_id,
-      name: t.fields.name,
-      author: t.fields.author,
-      description: t.fields.description,
-      tags: [], // Tags are not stored on-chain in this version
-      price_sui: Number(t.fields.price) / 1_000_000_000,
-      createdAt: 0, // Not stored on-chain
-      purchaseCount: 0, // Not tracked on-chain yet
+    // For each template, fetch the purchase count from the template_access table
+    const workflows = await Promise.all(templates.map(async (t: any) => {
+      let purchaseCount = 0;
+
+      console.log(`\n🔍 Checking purchase count for template: ${t.fields.name}`);
+      console.log(`   Template ID: ${t.fields.id}`);
+      console.log(`   Parent ID (template_access table): ${templateAccessTableId}`);
+
+      try {
+        // Try to fetch the access table for this template
+        const templateAccessField = await suiClient.getDynamicFieldObject({
+          parentId: templateAccessTableId,
+          name: {
+            type: '0x2::object::ID',
+            value: t.fields.id,
+          },
+        });
+
+        console.log(`   ✅ getDynamicFieldObject returned:`, JSON.stringify(templateAccessField, null, 2));
+
+        if (templateAccessField.data) {
+          console.log(`   ✅ templateAccessField.data exists`);
+          const accessTableContent = templateAccessField.data.content as any;
+          console.log(`   📊 Access table content:`, JSON.stringify(accessTableContent, null, 2));
+
+          const rawSize = accessTableContent.fields.value.fields.size;
+          console.log(`   📈 Raw size value: ${rawSize} (type: ${typeof rawSize})`);
+
+          purchaseCount = Number(rawSize || 0);
+          console.log(`   ✅ Final purchaseCount: ${purchaseCount}`);
+        } else {
+          console.log(`   ⚠️  templateAccessField.data is null or undefined`);
+        }
+      } catch (error: any) {
+        // If the dynamic field doesn't exist, no purchases yet (count = 0)
+        console.log(`   ❌ Error fetching access table: ${error.message}`);
+        console.log(`   This template has no purchases yet (count = 0)`);
+      }
+
+      return {
+        id: t.fields.id,
+        metadataBlobId: t.fields.metadata_blob_id,
+        name: t.fields.name,
+        author: t.fields.author,
+        description: t.fields.description,
+        tags: [], // Tags are not stored on-chain in this version
+        price_sui: Number(t.fields.price) / 1_000_000_000,
+        createdAt: 0, // Not stored on-chain
+        purchaseCount,
+      };
     }));
 
     res.json({

@@ -16,6 +16,7 @@ export interface WorkflowMetadata {
   created_at: number;
   purchaseCount: number;
   createdAt: number;
+  price_sui: number; // Price in SUI
 }
 
 export interface Strategy {
@@ -171,6 +172,90 @@ export function useWorkflowActions() {
     }
   };
 
+  const purchaseTemplateAccess = async (templateIndex: number, templateName: string, priceSui: number) => {
+    if (!currentAccount) {
+      throw new Error('Wallet not connected');
+    }
+
+    try {
+      console.log('💰 Purchasing template access:', templateName);
+      console.log('   Price:', priceSui, 'SUI');
+      console.log('   Template Index:', templateIndex);
+
+      // 1. Build template purchase transaction
+      console.log('📝 Building template purchase transaction...');
+      const buildResponse = await fetch(`${API_BASE_URL}/seal/build-template-purchase`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address: currentAccount.address,
+          templateIndex,
+        }),
+      });
+
+      const buildResult = await buildResponse.json();
+
+      if (!buildResult.success) {
+        throw new Error(buildResult.error || 'Failed to build purchase transaction');
+      }
+
+      console.log('💵 Template Price:', buildResult.data.price_sui, 'SUI');
+
+      // 2. Sign and execute purchase
+      console.log('🖊️ Please sign the purchase transaction...');
+      const txBytes = new Uint8Array(buildResult.data.transactionBytes);
+
+      const transaction = Transaction.from(txBytes);
+
+      const signedTx = await signTransaction({
+        transaction,
+      });
+
+      console.log('📡 Processing purchase...');
+      const purchaseResult = await suiClient.executeTransactionBlock({
+        transactionBlock: signedTx.bytes,
+        signature: signedTx.signature,
+        options: {
+          showEffects: true,
+        },
+      });
+
+      if (!purchaseResult.effects || purchaseResult.effects.status.status !== 'success') {
+        const errorDetail = purchaseResult.effects?.status.error || 'Unknown error';
+        console.error('❌ Transaction failed on-chain:', errorDetail);
+        throw new Error(`Purchase transaction failed: ${errorDetail}`);
+      }
+
+      console.log('✅ Purchase successful! TX:', purchaseResult.digest);
+
+      // 3. Confirm purchase
+      console.log('🔐 Confirming template purchase...');
+      const confirmResponse = await fetch(`${API_BASE_URL}/seal/confirm-template-purchase`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address: currentAccount.address,
+          templateIndex,
+          transactionDigest: purchaseResult.digest,
+        }),
+      });
+
+      const confirmResult = await confirmResponse.json();
+
+      if (!confirmResult.success) {
+        throw new Error(confirmResult.error || 'Failed to confirm purchase');
+      }
+
+      console.log('✅ Successfully purchased template access!');
+
+      return confirmResult.data;
+    } catch (error: any) {
+      console.error('❌ Template purchase error:', error);
+      throw new Error(`Failed to purchase template: ${error.message}`);
+    }
+  };
+
+  // Old purchase function - kept for backwards compatibility
   const purchaseWorkflow = async (workflowId: string) => {
     if (!currentAccount) {
       throw new Error('Wallet not connected');
@@ -179,7 +264,7 @@ export function useWorkflowActions() {
     try {
       console.log('🛒 Purchasing workflow:', workflowId);
       console.log('   Note: You must be in the whitelist (paid 0.5 SUI) to decrypt it');
-      
+
       // Call purchase API - just marks workflow as owned locally
       const response = await fetch(`${API_BASE_URL}/workflows/purchase`, {
         method: 'POST',
@@ -191,7 +276,7 @@ export function useWorkflowActions() {
       });
 
       const result = await response.json();
-      
+
       if (!result.success) {
         throw new Error(result.error || 'Purchase failed');
       }
@@ -321,6 +406,7 @@ export function useWorkflowActions() {
   return {
     uploadWorkflow,
     payForWhitelist,
+    purchaseTemplateAccess,
     purchaseWorkflow,
     decryptWorkflow,
     getOwnedWorkflows,

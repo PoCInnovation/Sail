@@ -11,7 +11,8 @@
     "lint": "eslint src --ext .ts",
     "start": "node dist/api/server.js",
     "start:api": "pnpm exec tsx src/api/server.ts",
-    "start:dev": "pnpm exec tsx watch src/api/server.ts"
+    "start:dev": "pnpm exec tsx watch src/api/server.ts",
+    "upload:workflows": "pnpm exec tsx scripts/upload-test-workflow.ts"
   },
   "keywords": [
     "sui",

@@ -13,6 +13,14 @@ const suiClient = new SuiClient({ url: getFullnodeUrl('testnet') });
 const sealWalrusService = new SealWalrusService(suiClient);
 
 /**
+ * GET /api/seal/health
+ * Health check endpoint
+ */
+router.get('/seal/health', (_req: Request, res: Response) => {
+  res.json({ success: true, message: 'Seal API is healthy' });
+});
+
+/**
  * POST /api/seal/encrypt
  * Encrypt a file and store on Walrus
  * Body: multipart/form-data with 'file' field
@@ -307,6 +315,210 @@ router.get('/seal/whitelist-price', async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({
       error: 'Failed to get whitelist price',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/seal/build-template-purchase
+ * Construire une transaction pour acheter l'accès à une template spécifique
+ * Body: { address, templateIndex }
+ * Returns: transaction bytes à signer
+ */
+router.post('/seal/build-template-purchase', async (req: Request, res: Response) => {
+  try {
+    const { address, templateIndex } = req.body;
+
+    if (!address || templateIndex === undefined) {
+      return res.status(400).json({
+        error: 'Missing required fields: address, templateIndex',
+      });
+    }
+
+    // Fetch the template to get its price
+    const whitelistObj = await suiClient.getObject({
+      id: ADMIN_CONFIG.WHITELIST_ID,
+      options: { showContent: true },
+    });
+
+    if (!whitelistObj.data?.content || whitelistObj.data.content.dataType !== 'moveObject') {
+      throw new Error('Failed to fetch whitelist object');
+    }
+
+    const content = whitelistObj.data.content as any;
+    const templates = content.fields.templates || [];
+
+    if (templateIndex >= templates.length) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+
+    const template = templates[templateIndex];
+    const templatePrice = BigInt(template.fields.price); // Already in MIST
+
+    console.log('💰 Building template purchase transaction:');
+    console.log('   User:', address);
+    console.log('   Template:', template.fields.name);
+    console.log('   Price:', Number(templatePrice) / 1_000_000_000, 'SUI');
+    console.log('   Template Index:', templateIndex);
+
+    // Construire la transaction
+    const tx = new Transaction();
+
+    // Split coins pour le paiement
+    const [paymentCoin] = tx.splitCoins(tx.gas, [templatePrice]);
+
+    // Appeler buy_template_access
+    tx.moveCall({
+      target: `${ADMIN_CONFIG.PACKAGE_ID}::whitelist::buy_template_access`,
+      arguments: [
+        tx.object(ADMIN_CONFIG.WHITELIST_ID),
+        tx.pure.u64(templateIndex),
+        paymentCoin,
+      ],
+    });
+
+    // Définir le sender
+    tx.setSender(address);
+
+    // Sérialiser la transaction
+    const txBytes = await tx.build({ client: suiClient });
+
+    res.json({
+      success: true,
+      data: {
+        transactionBytes: Array.from(txBytes),
+        templateName: template.fields.name,
+        price_sui: Number(templatePrice) / 1_000_000_000,
+        price_mist: Number(templatePrice),
+        templateIndex,
+      },
+    });
+  } catch (error: any) {
+    console.error('Build template purchase error:', error);
+    res.status(500).json({
+      error: 'Failed to build template purchase transaction',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/seal/confirm-template-purchase
+ * Confirmer l'achat d'une template
+ * Body: { address, templateIndex, transactionDigest }
+ */
+router.post('/seal/confirm-template-purchase', async (req: Request, res: Response) => {
+  try {
+    const { address, templateIndex, transactionDigest } = req.body;
+
+    if (!address || templateIndex === undefined || !transactionDigest) {
+      return res.status(400).json({
+        error: 'Missing required fields: address, templateIndex, transactionDigest',
+      });
+    }
+
+    console.log('🔍 Verifying template purchase:', transactionDigest);
+
+    // Vérifier que la transaction existe et est réussie
+    const txResult = await suiClient.getTransactionBlock({
+      digest: transactionDigest,
+      options: {
+        showEffects: true,
+      },
+    });
+
+    if (!txResult.effects || txResult.effects.status.status !== 'success') {
+      return res.status(400).json({
+        error: 'Transaction failed or not found',
+      });
+    }
+
+    console.log('✅ Template purchase confirmed!');
+
+    res.json({
+      success: true,
+      data: {
+        address,
+        templateIndex,
+        transactionDigest,
+        message: 'Successfully purchased template access',
+      },
+    });
+  } catch (error: any) {
+    console.error('Confirm template purchase error:', error);
+    res.status(500).json({
+      error: 'Failed to confirm template purchase',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/seal/check-template-access/:address/:templateId
+ * Vérifier si un utilisateur a accès à une template
+ */
+router.get('/seal/check-template-access/:address/:templateId', async (req: Request, res: Response) => {
+  try {
+    const { address, templateId } = req.params;
+
+    // Fetch whitelist object
+    const whitelistObj = await suiClient.getObject({
+      id: ADMIN_CONFIG.WHITELIST_ID,
+      options: { showContent: true },
+    });
+
+    if (!whitelistObj.data?.content || whitelistObj.data.content.dataType !== 'moveObject') {
+      throw new Error('Failed to fetch whitelist object');
+    }
+
+    const content = whitelistObj.data.content as any;
+    const templateAccessTableId = content.fields.template_access.fields.id.id;
+
+    // Check if there's an access table for this template
+    try {
+      const templateAccessField = await suiClient.getDynamicFieldObject({
+        parentId: templateAccessTableId,
+        name: {
+          type: '0x2::object::ID',
+          value: templateId,
+        },
+      });
+
+      if (!templateAccessField.data) {
+        // No access table for this template
+        return res.json({ success: true, data: { hasAccess: false } });
+      }
+
+      // Now check if the address is in the access table
+      const accessTableContent = templateAccessField.data.content as any;
+      const addressesTableId = accessTableContent.fields.value.fields.id.id;
+
+      const addressField = await suiClient.getDynamicFieldObject({
+        parentId: addressesTableId,
+        name: {
+          type: 'address',
+          value: address,
+        },
+      });
+
+      const hasAccess = !!addressField.data;
+
+      res.json({
+        success: true,
+        data: { hasAccess },
+      });
+    } catch (error) {
+      // If dynamic field not found, user doesn't have access
+      res.json({
+        success: true,
+        data: { hasAccess: false },
+      });
+    }
+  } catch (error: any) {
+    console.error('Check template access error:', error);
+    res.status(500).json({
+      error: 'Failed to check template access',
       message: error.message,
     });
   }

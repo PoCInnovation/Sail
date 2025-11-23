@@ -18,6 +18,7 @@ export interface EncryptResult {
 export interface Metadata {
   packageId: string;
   whitelistId: string;
+  templateId: string; // ID of the template (for per-template access control)
   nonce: string;
   dataBlobId: string;
   timestamp: number;
@@ -32,7 +33,7 @@ export class SealWalrusService {
   constructor(suiClient: SuiClient) {
     this.suiClient = suiClient;
     this.sealClient = new SealClient({
-      suiClient,
+      suiClient, 
       serverConfigs: [
         { objectId: '0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75', weight: 1 }
       ],
@@ -42,17 +43,29 @@ export class SealWalrusService {
 
   /**
    * Encrypt data and store on Walrus
+   * @param templateId - Optional template ID for per-template access control. If not provided, uses global whitelist.
    */
-  async encryptAndStore(data: Buffer, filename?: string): Promise<EncryptResult> {
+  async encryptAndStore(data: Buffer, templateId?: string, filename?: string): Promise<EncryptResult> {
     // Generate nonce
     const nonce = 'file-' + Date.now();
 
-    // Build ID: [whitelistObjectId][nonce]
-    // Build ID: [whitelistObjectId][nonce]
+    // Build ID: [whitelistObjectId][templateId?][nonce]
     const cleanWhitelistId = ADMIN_CONFIG.WHITELIST_ID.startsWith('0x') ? ADMIN_CONFIG.WHITELIST_ID.slice(2) : ADMIN_CONFIG.WHITELIST_ID;
     const whitelistIdBytes = fromHex(cleanWhitelistId);
-    const nonceBytes = new TextEncoder().encode(nonce);
-    const idBytes = new Uint8Array([...whitelistIdBytes, ...nonceBytes]);
+
+    let idBytes: Uint8Array;
+    if (templateId) {
+      // Per-template access: [whitelistId][templateId][nonce]
+      const cleanTemplateId = templateId.startsWith('0x') ? templateId.slice(2) : templateId;
+      const templateIdBytes = fromHex(cleanTemplateId);
+      const nonceBytes = new TextEncoder().encode(nonce);
+      idBytes = new Uint8Array([...whitelistIdBytes, ...templateIdBytes, ...nonceBytes]);
+    } else {
+      // Global whitelist: [whitelistId][nonce] (backwards compatible)
+      const nonceBytes = new TextEncoder().encode(nonce);
+      idBytes = new Uint8Array([...whitelistIdBytes, ...nonceBytes]);
+    }
+
     const hexId = Array.from(idBytes).map(b => b.toString(16).padStart(2, '0')).join('');
 
     // Encrypt with Seal
@@ -70,15 +83,15 @@ export class SealWalrusService {
     });
 
     const dataWalrusResult = await dataResponse.json();
-    const dataBlobId = dataWalrusResult.newlyCreated 
-      ? dataWalrusResult.newlyCreated.blobObject.blobId 
+    const dataBlobId = dataWalrusResult.newlyCreated
+      ? dataWalrusResult.newlyCreated.blobObject.blobId
       : dataWalrusResult.alreadyCertified.blobId;
 
-    // Create metadata (without backupKey for security)
     // Create metadata (without backupKey for security)
     const metadata: Metadata = {
       packageId: ADMIN_CONFIG.PACKAGE_ID,
       whitelistId: ADMIN_CONFIG.WHITELIST_ID,
+      templateId: templateId || '', // Empty string if no template ID (global whitelist)
       nonce,
       dataBlobId,
       timestamp: Date.now(),
@@ -94,8 +107,8 @@ export class SealWalrusService {
     });
 
     const metadataWalrusResult = await metadataResponse.json();
-    const metadataBlobId = metadataWalrusResult.newlyCreated 
-      ? metadataWalrusResult.newlyCreated.blobObject.blobId 
+    const metadataBlobId = metadataWalrusResult.newlyCreated
+      ? metadataWalrusResult.newlyCreated.blobObject.blobId
       : metadataWalrusResult.alreadyCertified.blobId;
 
     return {
@@ -129,13 +142,26 @@ export class SealWalrusService {
 
     const encryptedObject = new Uint8Array(await dataResponse.arrayBuffer());
 
-    // Build ID for policy
-    const cleanWhitelistId = metadata.whitelistId.startsWith('0x') 
-      ? metadata.whitelistId.slice(2) 
+    // Build ID for policy: [whitelistObjectId][templateId?][nonce]
+    const cleanWhitelistId = metadata.whitelistId.startsWith('0x')
+      ? metadata.whitelistId.slice(2)
       : metadata.whitelistId;
     const whitelistIdBytes = fromHex(cleanWhitelistId);
-    const nonceBytes = new TextEncoder().encode(metadata.nonce);
-    const idBytes = new Uint8Array([...whitelistIdBytes, ...nonceBytes]);
+
+    let idBytes: Uint8Array;
+    if (metadata.templateId) {
+      // Per-template access
+      const cleanTemplateId = metadata.templateId.startsWith('0x')
+        ? metadata.templateId.slice(2)
+        : metadata.templateId;
+      const templateIdBytes = fromHex(cleanTemplateId);
+      const nonceBytes = new TextEncoder().encode(metadata.nonce);
+      idBytes = new Uint8Array([...whitelistIdBytes, ...templateIdBytes, ...nonceBytes]);
+    } else {
+      // Global whitelist (backwards compatible)
+      const nonceBytes = new TextEncoder().encode(metadata.nonce);
+      idBytes = new Uint8Array([...whitelistIdBytes, ...nonceBytes]);
+    }
 
     // Create seal_approve transaction
     const tx = new Transaction();
