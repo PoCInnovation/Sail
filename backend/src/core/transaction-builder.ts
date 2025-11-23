@@ -150,7 +150,7 @@ export class TransactionBuilder {
         this.addFlashBorrow(node as FlashBorrowNode);
         break;
       case "FLASH_REPAY":
-        this.addFlashRepay(node as FlashRepayNode);
+        this.addFlashRepay(node as FlashRepayNode, strategy);
         break;
       case "DEX_SWAP":
         this.addDexSwap(node as DexSwapNode);
@@ -199,7 +199,7 @@ export class TransactionBuilder {
   /**
    * Add flash repay node
    */
-  private addFlashRepay(node: FlashRepayNode): void {
+  private addFlashRepay(node: FlashRepayNode, strategy: Strategy): void {
     const adapter = this.flashLoanAdapters.get(node.protocol);
     if (!adapter) {
       throw new Error(`No adapter found for flash loan protocol: ${node.protocol}`);
@@ -209,7 +209,18 @@ export class TransactionBuilder {
     const coin = this.resolveReference(node.inputs.coin_repay);
     const receipt = this.resolveReference(node.inputs.receipt);
 
-    adapter.repay(this.tx, node, coin, receipt);
+    // Find the corresponding borrow node to get the amount
+    // The receipt input is in format "nodeId.outputId"
+    const receiptRef = node.inputs.receipt;
+    const [borrowNodeId] = receiptRef.split(".");
+    const borrowNode = strategy.nodes.find((n) => n.id === borrowNodeId) as FlashBorrowNode;
+
+    let borrowedAmount: bigint | undefined;
+    if (borrowNode && borrowNode.type === "FLASH_BORROW") {
+      borrowedAmount = BigInt(borrowNode.params.amount);
+    }
+
+    adapter.repay(this.tx, node, coin, receipt, borrowedAmount);
   }
 
   /**

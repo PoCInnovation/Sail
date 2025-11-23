@@ -48,9 +48,23 @@ export class NaviAdapter extends BaseFlashLoanAdapter {
     return { coin, receipt };
   }
 
-  repay(tx: Transaction, node: FlashRepayNode, coin: any, receipt: any): void {
+  repay(tx: Transaction, node: FlashRepayNode, coin: any, receipt: any, borrowedAmount?: bigint): void {
     const config = this.getConfig();
     const poolConfig = this.getPoolConfig(node.params.asset);
+
+    // Special handling for SUI:
+    // If the asset is SUI, we can automatically pay the fee from the gas coin.
+    // This improves UX by not requiring the user to manually merge coins for the fee.
+    if (node.params.asset === "0x2::sui::SUI" && borrowedAmount) {
+      const fee = this.calculateFee(borrowedAmount);
+      
+      // Split the fee from the gas coin
+      // Note: tx.gas is a Coin<SUI>
+      const [feeCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(fee)]);
+      
+      // Merge the fee coin into the repayment coin
+      tx.mergeCoins(coin, [feeCoin]);
+    }
 
     // Convert Coin back to Balance for repayment
     // Navi flash_repay expects Balance, mirroring the flash_loan output

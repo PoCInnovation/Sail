@@ -43,7 +43,7 @@ export interface FlashLoanAdapter {
    * @param coin - Coin to repay (from result cache)
    * @param receipt - Receipt from borrow (hot potato)
    */
-  repay(tx: Transaction, node: FlashRepayNode, coin: any, receipt: any): void;
+  repay(tx: Transaction, node: FlashRepayNode, coin: any, receipt: any, borrowedAmount?: bigint): void;
 
   /**
    * Calculate flash loan fee
@@ -70,7 +70,7 @@ export abstract class BaseFlashLoanAdapter implements FlashLoanAdapter {
   protected abstract readonly feePercentage: number; // e.g., 0.0006 for 0.06%
 
   abstract borrow(tx: Transaction, node: FlashBorrowNode): BorrowResult;
-  abstract repay(tx: Transaction, node: FlashRepayNode, coin: any, receipt: any): void;
+  abstract repay(tx: Transaction, node: FlashRepayNode, coin: any, receipt: any, borrowedAmount?: bigint): void;
 
   calculateFee(amount: bigint): bigint {
     return (amount * BigInt(Math.floor(this.feePercentage * 1000000))) / BigInt(1000000);
