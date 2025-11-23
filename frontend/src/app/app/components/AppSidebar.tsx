@@ -32,12 +32,10 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { id: "dashboard", label: "Dashboard", icon: <DashboardIcon /> },
+  { id: "templates", label: "Strategy Folder", icon: <TemplatesIcon /> },
   { id: "builder", label: "Block Builder", icon: <WorkflowIcon /> },
   { id: "marketplace", label: "Marketplace", icon: <MarketplaceIcon />},
-  { id: "templates", label: "Strategy Folder", icon: <TemplatesIcon /> },
   { id: "history", label: "History", icon: <HistoryIcon /> },
-  { id: "settings", label: "Settings", icon: <SettingsIcon /> },
 ];
 
 interface AppSidebarProps {
