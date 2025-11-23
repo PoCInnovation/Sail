@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useCurrentAccount, useSignPersonalMessage, useSignTransaction, useSuiClient } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
+import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -241,12 +242,16 @@ export function useWorkflowActions() {
 
       const transaction = Transaction.from(txBytes);
 
+      // For marketplace purchases, use testnet (hardcoded)
       const signedTx = await signTransaction({
         transaction,
+        chain: 'sui:testnet',
       });
 
-      console.log('📡 Processing purchase...');
-      const purchaseResult = await suiClient.executeTransactionBlock({
+      console.log('📡 Processing purchase on testnet...');
+      // Create a testnet client specifically for marketplace purchases
+      const testnetClient = new SuiClient({ url: getFullnodeUrl('testnet') });
+      const purchaseResult = await testnetClient.executeTransactionBlock({
         transactionBlock: signedTx.bytes,
         signature: signedTx.signature,
         options: {

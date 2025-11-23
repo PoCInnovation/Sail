@@ -31,7 +31,7 @@ export function TemplatesSection() {
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
   const { uploadWorkflow } = useWorkflowActions();
 
-  const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
+  const { mutateAsync: signAndExecuteTransaction } = useSignAndExecuteTransaction();
 
   const addLog = (message: string, type: Log['type'] = 'info') => {
     setExecutionLogs(prev => [...prev, { timestamp: Date.now(), message, type }]);
@@ -133,7 +133,7 @@ export function TemplatesSection() {
 
   const handleRunStrategy = async () => {
     if (!selectedTemplate || !currentAccount) {
-      alert("Please connect your wallet first");
+      setNotification({ type: 'error', message: 'Please connect your wallet first' });
       return;
     }
 
@@ -172,28 +172,129 @@ export function TemplatesSection() {
       setExecutionStatus('signing');
       addLog("Requesting wallet signature...", 'info');
 
+      // Reconstruct transaction from bytes
       const tx = Transaction.from(bytes);
 
-      signAndExecuteTransaction(
-        {
-          transaction: tx,
-          chain: 'sui:mainnet',
-        },
-        {
-          onSuccess: (result) => {
-            console.log("Transaction executed:", result);
-            console.log(`SuiScan URL: https://suiscan.xyz/mainnet/tx/${result.digest}`);
+      // Log transaction details for debugging
+      console.log('📋 Transaction ready for signing:', {
+        sender: currentAccount.address,
+        network: 'mainnet',
+        bytesLength: bytes.length,
+        walletConnected: !!currentAccount,
+        walletAddress: currentAccount.address,
+      });
 
-            // Set executing status briefly before success
-            setExecutionStatus('executing');
-            addLog("Executing transaction on Sui Mainnet...", 'info');
+      addLog("Waiting for wallet approval...", 'info');
+      console.log('🔐 Calling signAndExecuteTransaction...');
 
-            // Small delay to show executing state
-            setTimeout(() => {
-              setExecutionStatus('success');
-              setTxDigest(result.digest);
+      // Execute with signAndExecuteTransaction hook
+      try {
+        console.log('📝 About to call mutate function...');
+        signAndExecuteTransaction(
+          {
+            transaction: tx,
+            chain: 'sui:mainnet',
+          },
+          {
+            onSuccess: (result) => {
+              console.log("Transaction executed:", result);
+              console.log(`SuiScan URL: https://suiscan.xyz/mainnet/tx/${result.digest}`);
 
-              // Use ref to get the latest executionSteps (avoid closure issues)
+              // Set executing status briefly before success
+              setExecutionStatus('executing');
+              addLog("Executing transaction on Sui Mainnet...", 'info');
+
+              // Small delay to show executing state
+              setTimeout(() => {
+                setExecutionStatus('success');
+                setTxDigest(result.digest);
+
+                // Use ref to get the latest executionSteps (avoid closure issues)
+                let currentSteps = executionStepsRef.current;
+
+                // Fallback: if ref is empty, try to re-extract from template
+                if (!currentSteps || currentSteps.length === 0) {
+                  currentSteps = extractStepsFromStrategy(selectedTemplate);
+                }
+
+                // Add logs immediately to state
+                const finalLogs: Log[] = [
+                  ...executionLogs,
+                  { timestamp: Date.now(), message: "Transaction submitted to the network!", type: 'success' as const },
+                  { timestamp: Date.now(), message: `Digest: ${result.digest}`, type: 'success' as const },
+                  { timestamp: Date.now(), message: "Execution completed successfully.", type: 'success' as const },
+                ];
+
+                const historyEntry: ExecutionHistoryEntry = {
+                  id: `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                  timestamp: Date.now(),
+                  date: new Date().toISOString(),
+                  strategyId: selectedTemplate.id,
+                  strategyName: selectedTemplate.meta.name,
+                  strategyDescription: selectedTemplate.meta.description,
+                  status: 'success' as const,
+                  txDigest: result.digest,
+                  network: 'mainnet',
+                  sender: currentAccount.address,
+                  logs: finalLogs,
+                  effects: result.effects,
+                  executionSteps: currentSteps.map(step => ({
+                    ...step,
+                    status: 'success' as const,
+                  })),
+                  stats: {
+                    totalSteps: currentSteps.length,
+                    successfulSteps: currentSteps.length,
+                    failedSteps: 0,
+                    totalDuration: finalLogs[finalLogs.length - 1]?.timestamp - (finalLogs[0]?.timestamp || Date.now()),
+                  },
+                };
+
+                const existingHistory = localStorage.getItem('execution_history');
+                let history: ExecutionHistoryEntry[] = [];
+
+                try {
+                  history = existingHistory ? JSON.parse(existingHistory) : [];
+                } catch (e) {
+                  history = [];
+                }
+
+                history.unshift(historyEntry); // Add to beginning
+
+                // Keep only last 100 executions
+                if (history.length > 100) {
+                  history.splice(100);
+                }
+
+                try {
+                  localStorage.setItem('execution_history', JSON.stringify(history));
+
+                  // Notify user
+                  setNotification({ type: 'success', message: 'Execution recorded in history' });
+                } catch (error) {
+                  console.error('❌ Failed to save to localStorage:', error);
+                  setNotification({ type: 'error', message: 'Failed to save execution history' });
+                }
+
+                // Update logs state
+                setExecutionLogs(finalLogs);
+
+                // Update executionSteps state to mark them as success
+                setExecutionSteps(currentSteps.map(step => ({
+                  ...step,
+                  status: 'success' as const,
+                })));
+
+                // Dispatch custom event to notify other components
+                window.dispatchEvent(new CustomEvent('execution_history_updated', { detail: historyEntry }));
+              }, 500);
+            },
+            onError: (error) => {
+              console.error("Execution failed:", error);
+              setExecutionStatus('error');
+              addLog(`Execution failed: ${error.message}`, 'error');
+
+              // Save failed execution to history
               let currentSteps = executionStepsRef.current;
 
               // Fallback: if ref is empty, try to re-extract from template
@@ -201,138 +302,63 @@ export function TemplatesSection() {
                 currentSteps = extractStepsFromStrategy(selectedTemplate);
               }
 
-              // Add logs immediately to state
               const finalLogs: Log[] = [
                 ...executionLogs,
-                { timestamp: Date.now(), message: "Transaction submitted to the network!", type: 'success' as const },
-                { timestamp: Date.now(), message: `Digest: ${result.digest}`, type: 'success' as const },
-                { timestamp: Date.now(), message: "Execution completed successfully.", type: 'success' as const },
+                { timestamp: Date.now(), message: `Execution failed: ${error.message}`, type: 'error' as const },
               ];
 
               const historyEntry: ExecutionHistoryEntry = {
-                id: `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                id: `exec_fail_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                 timestamp: Date.now(),
                 date: new Date().toISOString(),
                 strategyId: selectedTemplate.id,
                 strategyName: selectedTemplate.meta.name,
                 strategyDescription: selectedTemplate.meta.description,
-                status: 'success' as const,
-                txDigest: result.digest,
+                status: 'error' as const,
                 network: 'mainnet',
                 sender: currentAccount.address,
                 logs: finalLogs,
-                effects: result.effects,
                 executionSteps: currentSteps.map(step => ({
                   ...step,
-                  status: 'success' as const,
+                  status: 'error' as const, // Mark all steps as error/cancelled for now
+                  error: { message: error.message }
                 })),
                 stats: {
                   totalSteps: currentSteps.length,
-                  successfulSteps: currentSteps.length,
-                  failedSteps: 0,
-                  totalDuration: finalLogs[finalLogs.length - 1]?.timestamp - (finalLogs[0]?.timestamp || Date.now()),
+                  successfulSteps: 0,
+                  failedSteps: currentSteps.length,
+                  totalDuration: Date.now() - (executionLogs[0]?.timestamp || Date.now()),
                 },
               };
 
-              const existingHistory = localStorage.getItem('execution_history');
-              let history: ExecutionHistoryEntry[] = [];
-
               try {
-                history = existingHistory ? JSON.parse(existingHistory) : [];
-              } catch (e) {
-                history = [];
-              }
+                const existingHistory = localStorage.getItem('execution_history');
+                const history = existingHistory ? JSON.parse(existingHistory) : [];
+                history.unshift(historyEntry);
 
-              history.unshift(historyEntry); // Add to beginning
+                if (history.length > 100) history.splice(100);
 
-              // Keep only last 100 executions
-              if (history.length > 100) {
-                history.splice(100);
-              }
-
-              try {
                 localStorage.setItem('execution_history', JSON.stringify(history));
+                setNotification({ type: 'error', message: 'Failed execution recorded in history' });
 
-                // Notify user
-                setNotification({ type: 'success', message: 'Execution recorded in history' });
-              } catch (error) {
-                console.error('❌ Failed to save to localStorage:', error);
-                setNotification({ type: 'error', message: 'Failed to save execution history' });
+                // Dispatch event
+                window.dispatchEvent(new CustomEvent('execution_history_updated', { detail: historyEntry }));
+              } catch (e) {
+                console.error('❌ Failed to save error history:', e);
               }
-
-              // Update logs state
-              setExecutionLogs(finalLogs);
-
-              // Update executionSteps state to mark them as success
-              setExecutionSteps(currentSteps.map(step => ({
-                ...step,
-                status: 'success' as const,
-              })));
-
-              // Dispatch custom event to notify other components
-              window.dispatchEvent(new CustomEvent('execution_history_updated', { detail: historyEntry }));
-            }, 500);
-          },
-          onError: (error) => {
-            console.error("Execution failed:", error);
-            setExecutionStatus('error');
-            addLog(`Execution failed: ${error.message}`, 'error');
-
-            // Save failed execution to history
-            let currentSteps = executionStepsRef.current;
-
-            // Fallback: if ref is empty, try to re-extract from template
-            if (!currentSteps || currentSteps.length === 0) {
-              currentSteps = extractStepsFromStrategy(selectedTemplate);
-            }
-
-            const finalLogs: Log[] = [
-              ...executionLogs,
-              { timestamp: Date.now(), message: `Execution failed: ${error.message}`, type: 'error' as const },
-            ];
-
-            const historyEntry: ExecutionHistoryEntry = {
-              id: `exec_fail_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-              timestamp: Date.now(),
-              date: new Date().toISOString(),
-              strategyId: selectedTemplate.id,
-              strategyName: selectedTemplate.meta.name,
-              strategyDescription: selectedTemplate.meta.description,
-              status: 'error' as const,
-              network: 'mainnet',
-              sender: currentAccount.address,
-              logs: finalLogs,
-              executionSteps: currentSteps.map(step => ({
-                ...step,
-                status: 'error' as const, // Mark all steps as error/cancelled for now
-                error: { message: error.message }
-              })),
-              stats: {
-                totalSteps: currentSteps.length,
-                successfulSteps: 0,
-                failedSteps: currentSteps.length,
-                totalDuration: Date.now() - (executionLogs[0]?.timestamp || Date.now()),
-              },
-            };
-
-            try {
-              const existingHistory = localStorage.getItem('execution_history');
-              const history = existingHistory ? JSON.parse(existingHistory) : [];
-              history.unshift(historyEntry);
-
-              if (history.length > 100) history.splice(100);
-
-              localStorage.setItem('execution_history', JSON.stringify(history));
-              setNotification({ type: 'error', message: 'Failed execution recorded in history' });
-
-              // Dispatch event
-              window.dispatchEvent(new CustomEvent('execution_history_updated', { detail: historyEntry }));
-            } catch (e) {
-              console.error('❌ Failed to save error history:', e);
-            }
-          },
-        }
-      );
+            },
+          }
+        );
+      } catch (signError: any) {
+        // This catches errors from signAndExecuteTransaction itself
+        console.error('❌ Sign and execute error:', signError);
+        setExecutionStatus('error');
+        addLog(`Failed to sign transaction: ${signError.message}`, 'error');
+        setNotification({ 
+          type: 'error', 
+          message: `Failed to sign transaction: ${signError.message}. Make sure your wallet is connected to Mainnet.` 
+        });
+      }
     } catch (error: any) {
       console.error("Run strategy error:", error);
       setExecutionStatus('error');
