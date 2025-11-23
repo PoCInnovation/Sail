@@ -59,20 +59,25 @@ export class Simulator {
       // (or we could assume the builder attached them to the node objects if we modified it, but we didn't).
 
       // 2. Execute Dry Run
+      // Don't set explicit gas budget - let it auto-calculate based on actual gas needed
+      // This prevents validation errors when the sender has limited balance
+
+      const txBytes = await tx.build({ client: this.client });
+
       const dryRunResult = await this.client.dryRunTransactionBlock({
-        transactionBlock: await tx.build({ client: this.client }),
+        transactionBlock: txBytes,
       });
 
       // 3. Parse Results
       if (dryRunResult.effects.status.status === "success") {
         result.success = true;
-        
+
         // Calculate Gas Used
         const gasUsed =
           BigInt(dryRunResult.effects.gasUsed.computationCost) +
           BigInt(dryRunResult.effects.gasUsed.storageCost) -
           BigInt(dryRunResult.effects.gasUsed.storageRebate);
-        
+
         result.estimated_gas = Number(gasUsed);
 
         // Calculate Profit/Loss from Balance Changes
@@ -85,9 +90,9 @@ export class Simulator {
             // Owner can be { AddressOwner: string } or { ObjectOwner: string } or { Shared: ... }
             // We need to check if it matches our sender
             if (
-              change.owner && 
-              typeof change.owner === 'object' && 
-              'AddressOwner' in change.owner && 
+              change.owner &&
+              typeof change.owner === 'object' &&
+              'AddressOwner' in change.owner &&
               change.owner.AddressOwner === sender
             ) {
               const current = balanceMap.get(change.coinType) || 0n;
@@ -103,27 +108,94 @@ export class Simulator {
             amount: amount.toString(),
           });
         });
-
       } else {
         // Transaction failed
         result.success = false;
+        const errorMsg = dryRunResult.effects.status.error || "Unknown error";
+        const userMessage = this.parseExecutionError(errorMsg);
         result.errors.push({
           rule_id: "dry_run_failed",
           severity: "ERROR",
-          message: `Dry run failed: ${dryRunResult.effects.status.error || "Unknown error"}`,
+          message: userMessage,
         });
       }
 
     } catch (error: any) {
       result.success = false;
+      const userMessage = this.parseExecutionError(error.message || "An unexpected error occurred during simulation");
       result.errors.push({
         rule_id: "simulation_error",
         severity: "ERROR",
-        message: error.message || "An unexpected error occurred during simulation",
+        message: userMessage,
       });
     }
 
     return result;
+  }
+
+  /**
+   * Parse Move execution errors and return user-friendly messages
+   */
+  private parseExecutionError(errorMsg: string): string {
+    // Handle "could not automatically determine a budget" errors with MoveAbort
+    if (errorMsg.includes("could not automatically determine a budget") && errorMsg.includes("MoveAbort")) {
+      // Extract abort code
+      const abortCodeMatch = errorMsg.match(/MoveAbort.*?(\d+)\)/);
+      const abortCode = abortCodeMatch ? parseInt(abortCodeMatch[1]) : null;
+
+      if (abortCode === 1503) {
+        return "Insufficient balance: You don't have enough SUI on mainnet to cover the transaction. Make sure you have sufficient balance to cover the borrowed amount + gas fees.";
+      }
+      if (abortCode === 1502) {
+        return "Flash loan repayment error: The repayment amount is incorrect. The borrowed amount plus fees must be repaid exactly.";
+      }
+      if (abortCode === 1) {
+        return "Assertion failed in flash loan contract. Check your strategy logic.";
+      }
+
+      return `Budget error: The protocol cannot determine the required budget (error code: ${abortCode || "unknown"}). You probably don't have enough SUI on mainnet.`;
+    }
+
+    // Handle Move abort errors (e.g., "MoveAbort(MoveLocation { ... }, 1503)")
+    if (errorMsg.includes("MoveAbort")) {
+      // Extract abort code if available
+      const abortCodeMatch = errorMsg.match(/MoveAbort.*?(\d+)\)/);
+      const abortCode = abortCodeMatch ? parseInt(abortCodeMatch[1]) : null;
+
+      // Map common abort codes to user-friendly messages
+      if (abortCode === 1503) {
+        return "Insufficient balance: You don't have enough SUI on mainnet to cover the transaction. Make sure you have sufficient balance to cover the borrowed amount + gas fees.";
+      }
+      if (abortCode === 1502) {
+        return "Flash loan repayment error: The repayment amount is incorrect. The borrowed amount plus fees must be repaid exactly.";
+      }
+      if (abortCode === 1) {
+        return "Assertion failed in flash loan contract. Check your strategy logic.";
+      }
+
+      // Generic message for other abort codes
+      return `Execution error (Error code: ${abortCode || "unknown"}). You may not have enough funds or there may be an issue with your strategy logic on mainnet.`;
+    }
+
+    // Handle other error patterns
+    if (errorMsg.includes("could not automatically determine a budget")) {
+      return "Unable to determine gas budget: You may not have enough SUI on mainnet for gas fees. Make sure you have sufficient balance.";
+    }
+
+    if (errorMsg.includes("balance")) {
+      return "Insufficient balance on mainnet: You don't have enough SUI to execute this strategy. Please add more funds to your wallet.";
+    }
+
+    if (errorMsg.includes("gas")) {
+      return "Insufficient gas on mainnet: You don't have enough SUI to pay for gas fees. Please add more funds to your wallet.";
+    }
+
+    if (errorMsg.includes("coin")) {
+      return "Coin error on mainnet: There may be an issue with the coins in your strategy. Check that all coin types are correct.";
+    }
+
+    // Return original error with a generic note
+    return `Execution error on mainnet: ${errorMsg}. Make sure you have sufficient SUI balance and check your strategy.`;
   }
 
   private getFullNodeUrl(): string {

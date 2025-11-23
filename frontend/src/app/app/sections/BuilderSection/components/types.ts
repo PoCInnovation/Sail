@@ -1,6 +1,6 @@
 import { Repeat, ArrowDownLeft, ArrowUpRight, Zap } from "lucide-react";
 
-export type BlockType = "swap" | "deposit" | "withdraw" | "flashloan";
+export type BlockType = "flash_borrow" | "swap" | "flash_repay";
 
 export interface Block {
   id: string;
@@ -11,7 +11,7 @@ export interface Block {
 export interface SimulationResult {
   success: boolean;
   estimated_gas: number;
-  estimated_profit_loss: Array<{ token: string; amount: string }>;
+  estimated_profit_loss: Array<{ token?: string; amount: string; coin_type?: string }>;
   errors: Array<{ message: string }>;
 }
 
@@ -23,9 +23,8 @@ export interface BlockTypeDef {
 }
 
 export const BLOCK_TYPES: BlockTypeDef[] = [
+  { type: "flash_borrow", label: "FLASH BORROW", indicator: "bg-amber-600", icon: Zap },
   { type: "swap", label: "SWAP", indicator: "bg-blue-600", icon: Repeat },
-  { type: "deposit", label: "DEPOSIT", indicator: "bg-emerald-600", icon: ArrowDownLeft },
-  { type: "withdraw", label: "WITHDRAW", indicator: "bg-rose-600", icon: ArrowUpRight },
-  { type: "flashloan", label: "FLASH LOAN", indicator: "bg-amber-600", icon: Zap },
+  { type: "flash_repay", label: "FLASH REPAY", indicator: "bg-emerald-600", icon: ArrowDownLeft },
 ];
 

@@ -12,7 +12,7 @@ const sectionNames: Record<string, string> = {
   dashboard: "Dashboard",
   builder: "Block Builder",
   marketplace: "Marketplace",
-  templates: "Templates",
+  templates: "Strategy Folder",
   history: "History",
   settings: "Settings",
 };

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { TransactionBuilder } from '../../core/transaction-builder';
 import { Strategy } from '../../types/strategy';
+import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
 
 const router: Router = Router();
 
@@ -26,9 +27,16 @@ router.post('/build', async (req: Request, res: Response): Promise<void> => {
     // Set the sender
     tx.setSender(sender);
 
+    // Initialize client
+    const client = new SuiClient({ url: getFullnodeUrl('mainnet') });
+
+    // Get reference gas price
+    const rgp = await client.getReferenceGasPrice();
+    tx.setGasPrice(rgp);
+
     // Serialize the transaction to bytes
     const txBytes = await tx.build({
-      client: undefined as any,
+      client,
       onlyTransactionKind: false
     });
 

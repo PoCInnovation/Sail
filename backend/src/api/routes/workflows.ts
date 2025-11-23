@@ -386,20 +386,43 @@ router.post('/workflows/decrypt', async (req: Request, res: Response) => {
     }
 
     console.log('🔓 Decrypting workflow:', workflowId);
+    console.log('   Address:', address);
+    console.log('   SessionId:', sessionId);
+    console.log('   MetadataBlobId:', workflow.metadataBlobId);
 
     // Décrypter depuis Walrus
-    const decryptedData = await sealWalrusService.decryptFromWalrus(
-      workflow.metadataBlobId,
-      sessionKey,
-      signature,
-      address
-    );
+    let decryptedData;
+    try {
+      decryptedData = await sealWalrusService.decryptFromWalrus(
+        workflow.metadataBlobId,
+        sessionKey,
+        signature,
+        address
+      );
+    } catch (decryptError: any) {
+      console.error('❌ Seal decryption failed:', decryptError);
+      console.error('   Error message:', decryptError.message);
+      console.error('   Error type:', decryptError.constructor.name);
+
+      // Provide better error message
+      if (decryptError.message.includes('access')) {
+        return res.status(403).json({
+          error: 'Access denied to workflow decryption',
+          message: 'You must be in the Seal whitelist (have paid 0.5 SUI) to decrypt this workflow. Please complete the whitelist payment first.',
+          details: decryptError.message,
+        });
+      }
+
+      throw decryptError;
+    }
 
     // Parser le JSON
     const workflowJson = JSON.parse(decryptedData.toString('utf-8'));
 
     // Nettoyer la session key
     sessionKeys.delete(sessionId);
+
+    console.log('✅ Workflow decrypted successfully');
 
     res.json({
       success: true,
@@ -408,10 +431,13 @@ router.post('/workflows/decrypt', async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    console.error('Workflow decrypt error:', error);
+    console.error('❌ Workflow decrypt error:', error);
+    console.error('   Error message:', error.message);
+    console.error('   Error stack:', error.stack);
     res.status(500).json({
       error: 'Failed to decrypt workflow',
       message: error.message,
+      details: error.toString(),
     });
   }
 });
