@@ -127,6 +127,7 @@ export function useWorkflowActions() {
       
       const signedTx = await signTransaction({
         transaction,
+        chain: 'sui:testnet',
       });
 
       console.log('📡 Processing payment...');

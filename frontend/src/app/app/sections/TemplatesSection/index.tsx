@@ -1,9 +1,8 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
-import { ExecutionConsole, Log, ExecutionStatus } from "./components/ExecutionConsole";
 import { ExecutionSteps } from "./components/ExecutionSteps";
 import { Transaction } from "@mysten/sui/transactions";
 import { Play, Edit, Trash2, Upload, Copy, Layers, Calendar, User, X, GripVertical, Loader2 } from "lucide-react";
@@ -12,6 +11,7 @@ import { api } from "@/services/api";
 import { useWorkflowActions } from "@/hooks/useWorkflows";
 import { PublishModal } from "../BuilderSection/components/PublishModal";
 import { Snackbar, Alert } from "@mui/material";
+import { ExecutionStepDetail, ExecutionHistoryEntry, Log, ExecutionStatus } from "./components/types";
 
 export function TemplatesSection() {
   const currentAccount = useCurrentAccount();
@@ -22,7 +22,9 @@ export function TemplatesSection() {
   const [executionLogs, setExecutionLogs] = useState<Log[]>([]);
   const [executionStatus, setExecutionStatus] = useState<ExecutionStatus>('idle');
   const [txDigest, setTxDigest] = useState<string | undefined>();
-  
+  const [executionSteps, setExecutionSteps] = useState<ExecutionStepDetail[]>([]);
+  const executionStepsRef = useRef<ExecutionStepDetail[]>([]);
+
   // Publish State
   const [publishModalOpen, setPublishModalOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -33,6 +35,31 @@ export function TemplatesSection() {
 
   const addLog = (message: string, type: Log['type'] = 'info') => {
     setExecutionLogs(prev => [...prev, { timestamp: Date.now(), message, type }]);
+  };
+
+  // Extract execution steps from strategy nodes
+  const extractStepsFromStrategy = (strategy: Strategy): ExecutionStepDetail[] => {
+    return strategy.nodes
+      .filter(node => ['FLASH_BORROW', 'DEX_SWAP', 'FLASH_REPAY', 'COIN_MERGE', 'COIN_SPLIT'].includes(node.type))
+      .map((node, index) => {
+        const step: ExecutionStepDetail = {
+          id: node.id,
+          order: index + 1,
+          type: node.type as 'FLASH_BORROW' | 'DEX_SWAP' | 'FLASH_REPAY' | 'COIN_MERGE' | 'COIN_SPLIT',
+          protocol: node.protocol || 'UNKNOWN',
+          status: 'pending',
+          inputs: {
+            coinType: node.params?.coin_type,
+            amount: node.params?.amount,
+            amountDisplay: node.params?.amount ? `${(parseInt(node.params.amount) / 1_000_000_000).toFixed(4)} SUI` : undefined,
+            pool: node.params?.pool_id,
+            direction: node.params?.direction,
+          },
+          metadata: node.params,
+          logs: [],
+        };
+        return step;
+      });
   };
 
   useEffect(() => {
@@ -114,9 +141,14 @@ export function TemplatesSection() {
     setExecutionStatus('building');
     setExecutionLogs([]);
     setTxDigest(undefined);
+    const steps = extractStepsFromStrategy(selectedTemplate);
+    setExecutionSteps(steps);
+    executionStepsRef.current = steps; // Store in ref for access in callbacks
+
     addLog(`Initializing strategy execution: ${selectedTemplate.meta.name}`, 'info');
     addLog(`Network: Mainnet`, 'info');
     addLog(`Sender: ${currentAccount.address}`, 'info');
+    addLog(`Total steps: ${steps.length}`, 'info');
 
     try {
       // 1. Build transaction
@@ -145,29 +177,159 @@ export function TemplatesSection() {
       signAndExecuteTransaction(
         {
           transaction: tx,
+          chain: 'sui:mainnet',
         },
         {
           onSuccess: (result) => {
             console.log("Transaction executed:", result);
             console.log(`SuiScan URL: https://suiscan.xyz/mainnet/tx/${result.digest}`);
-            
+
             // Set executing status briefly before success
             setExecutionStatus('executing');
             addLog("Executing transaction on Sui Mainnet...", 'info');
-            
+
             // Small delay to show executing state
             setTimeout(() => {
               setExecutionStatus('success');
               setTxDigest(result.digest);
-              addLog("Transaction submitted to the network!", 'success');
-              addLog(`Digest: ${result.digest}`, 'success');
-              addLog("Execution completed successfully.", 'success');
+
+              // Use ref to get the latest executionSteps (avoid closure issues)
+              let currentSteps = executionStepsRef.current;
+              
+              // Fallback: if ref is empty, try to re-extract from template
+              if (!currentSteps || currentSteps.length === 0) {
+                currentSteps = extractStepsFromStrategy(selectedTemplate);
+              }
+
+              // Add logs immediately to state
+              const finalLogs: Log[] = [
+                ...executionLogs,
+                { timestamp: Date.now(), message: "Transaction submitted to the network!", type: 'success' as const },
+                { timestamp: Date.now(), message: `Digest: ${result.digest}`, type: 'success' as const },
+                { timestamp: Date.now(), message: "Execution completed successfully.", type: 'success' as const },
+              ];
+
+              const historyEntry: ExecutionHistoryEntry = {
+                id: `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                timestamp: Date.now(),
+                date: new Date().toISOString(),
+                strategyId: selectedTemplate.id,
+                strategyName: selectedTemplate.meta.name,
+                strategyDescription: selectedTemplate.meta.description,
+                status: 'success' as const,
+                txDigest: result.digest,
+                network: 'mainnet',
+                sender: currentAccount.address,
+                logs: finalLogs,
+                effects: result.effects,
+                executionSteps: currentSteps.map(step => ({
+                  ...step,
+                  status: 'success' as const,
+                })),
+                stats: {
+                  totalSteps: currentSteps.length,
+                  successfulSteps: currentSteps.length,
+                  failedSteps: 0,
+                  totalDuration: finalLogs[finalLogs.length - 1]?.timestamp - (finalLogs[0]?.timestamp || Date.now()),
+                },
+              };
+
+              const existingHistory = localStorage.getItem('execution_history');
+              let history: ExecutionHistoryEntry[] = [];
+
+              try {
+                history = existingHistory ? JSON.parse(existingHistory) : [];
+              } catch (e) {
+                history = [];
+              }
+
+              history.unshift(historyEntry); // Add to beginning
+
+              // Keep only last 100 executions
+              if (history.length > 100) {
+                history.splice(100);
+              }
+
+              try {
+                localStorage.setItem('execution_history', JSON.stringify(history));
+                
+                // Notify user
+                setNotification({ type: 'success', message: 'Execution recorded in history' });
+              } catch (error) {
+                console.error('❌ Failed to save to localStorage:', error);
+                setNotification({ type: 'error', message: 'Failed to save execution history' });
+              }
+
+              // Update logs state
+              setExecutionLogs(finalLogs);
+
+              // Update executionSteps state to mark them as success
+              setExecutionSteps(currentSteps.map(step => ({
+                ...step,
+                status: 'success' as const,
+              })));
+
+              // Dispatch custom event to notify other components
+              window.dispatchEvent(new CustomEvent('execution_history_updated', { detail: historyEntry }));
             }, 500);
           },
           onError: (error) => {
             console.error("Execution failed:", error);
             setExecutionStatus('error');
             addLog(`Execution failed: ${error.message}`, 'error');
+
+            // Save failed execution to history
+            let currentSteps = executionStepsRef.current;
+            
+            // Fallback: if ref is empty, try to re-extract from template
+            if (!currentSteps || currentSteps.length === 0) {
+              currentSteps = extractStepsFromStrategy(selectedTemplate);
+            }
+
+            const finalLogs: Log[] = [
+              ...executionLogs,
+              { timestamp: Date.now(), message: `Execution failed: ${error.message}`, type: 'error' as const },
+            ];
+
+            const historyEntry: ExecutionHistoryEntry = {
+              id: `exec_fail_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              timestamp: Date.now(),
+              date: new Date().toISOString(),
+              strategyId: selectedTemplate.id,
+              strategyName: selectedTemplate.meta.name,
+              strategyDescription: selectedTemplate.meta.description,
+              status: 'error' as const,
+              network: 'mainnet',
+              sender: currentAccount.address,
+              logs: finalLogs,
+              executionSteps: currentSteps.map(step => ({
+                ...step,
+                status: 'error' as const, // Mark all steps as error/cancelled for now
+                error: { message: error.message }
+              })),
+              stats: {
+                totalSteps: currentSteps.length,
+                successfulSteps: 0,
+                failedSteps: currentSteps.length,
+                totalDuration: Date.now() - (executionLogs[0]?.timestamp || Date.now()),
+              },
+            };
+
+            try {
+              const existingHistory = localStorage.getItem('execution_history');
+              const history = existingHistory ? JSON.parse(existingHistory) : [];
+              history.unshift(historyEntry);
+              
+              if (history.length > 100) history.splice(100);
+              
+              localStorage.setItem('execution_history', JSON.stringify(history));
+              setNotification({ type: 'error', message: 'Failed execution recorded in history' });
+              
+              // Dispatch event
+              window.dispatchEvent(new CustomEvent('execution_history_updated', { detail: historyEntry }));
+            } catch (e) {
+              console.error('❌ Failed to save error history:', e);
+            }
           },
         }
       );
