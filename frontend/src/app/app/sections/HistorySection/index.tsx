@@ -62,15 +62,11 @@ export function HistorySection() {
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
-        console.log('📚 Loaded history:', parsed.length, 'entries');
-        parsed.forEach((entry: ExecutionHistoryEntry, index: number) => {
-          console.log(`   Entry ${index + 1}:`, {
-            name: entry.strategyName,
-            stepsCount: entry.executionSteps?.length || 0,
-            hasSteps: !!entry.executionSteps && entry.executionSteps.length > 0,
-          });
-        });
-        setHistory(parsed);
+        
+        // Filter out invalid entries
+        const validEntries = Array.isArray(parsed) ? parsed.filter((e: any) => e && e.id) : [];
+        
+        setHistory(validEntries);
       } catch (e) {
         console.error('Failed to parse history:', e);
         setHistory([]);
@@ -163,6 +159,13 @@ export function HistorySection() {
             Clear History
           </button>
         )}
+        
+        <button
+          onClick={loadHistory}
+          className="px-4 py-2 bg-blue-500/10 border-2 border-blue-500/50 text-blue-400 font-mono text-xs uppercase hover:bg-blue-500/20 transition-colors"
+        >
+          Refresh
+        </button>
       </div>
 
       {/* History List */}
