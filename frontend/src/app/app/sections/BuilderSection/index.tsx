@@ -87,7 +87,6 @@ export function BuilderSection({ onNavigate }: BuilderSectionProps) {
       alert("Failed to save strategy");
     }
   };
-
   const handlePublishClick = () => {
     if (!currentAccount) {
       setNotification({ type: 'error', message: 'Please connect your wallet first' });
