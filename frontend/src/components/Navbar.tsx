@@ -28,6 +28,7 @@ export function Navbar() {
             src="/logo-simple.png"
             alt="Sail Logo"
             fill
+            sizes="48px"
             className="object-contain"
             priority
           />
