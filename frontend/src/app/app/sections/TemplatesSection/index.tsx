@@ -8,6 +8,9 @@ import { Transaction } from "@mysten/sui/transactions";
 import { Play, Edit, Trash2, Upload, Copy, Layers, Calendar, User, X, GripVertical, Loader2 } from "lucide-react";
 import type { Strategy } from "@/hooks/useWorkflows";
 import { api } from "@/services/api";
+import { useWorkflowActions } from "@/hooks/useWorkflows";
+import { PublishModal } from "../BuilderSection/components/PublishModal";
+import { Snackbar, Alert } from "@mui/material";
 
 export function TemplatesSection() {
   const currentAccount = useCurrentAccount();
@@ -18,6 +21,12 @@ export function TemplatesSection() {
   const [executionLogs, setExecutionLogs] = useState<Log[]>([]);
   const [executionStatus, setExecutionStatus] = useState<ExecutionStatus>('idle');
   const [txDigest, setTxDigest] = useState<string | undefined>();
+  
+  // Publish State
+  const [publishModalOpen, setPublishModalOpen] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  const { uploadWorkflow } = useWorkflowActions();
 
   const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
 
@@ -157,6 +166,45 @@ export function TemplatesSection() {
       console.error("Run strategy error:", error);
       setExecutionStatus('error');
       addLog(`Error: ${error.message}`, 'error');
+    }
+  };
+
+  const handlePublishClick = () => {
+    if (!currentAccount) {
+      setNotification({ type: 'error', message: 'Please connect your wallet first' });
+      return;
+    }
+    setPublishModalOpen(true);
+  };
+
+  const handlePublish = async (data: { name: string; description: string; price: number; tags: string[] }) => {
+    if (!currentAccount || !selectedTemplate) return;
+
+    setPublishing(true);
+    try {
+      // Update the selected template's metadata with user input
+      const updatedStrategy: Strategy = {
+        ...selectedTemplate,
+        meta: {
+          ...selectedTemplate.meta,
+          name: data.name,
+          description: data.description,
+          tags: data.tags,
+          price_sui: data.price,
+          updated_at: Date.now()
+        }
+      };
+
+      // Call the uploadWorkflow function
+      await uploadWorkflow(updatedStrategy);
+      
+      setNotification({ type: 'success', message: 'Workflow published successfully!' });
+      setPublishModalOpen(false);
+      setSelectedTemplate(null);
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err.message || 'Failed to publish workflow' });
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -490,7 +538,7 @@ export function TemplatesSection() {
                   
                   <button 
                     className="flex items-center justify-center gap-2 bg-transparent border border-white/10 hover:border-white/30 hover:bg-white/5 text-gray-300 p-3 font-mono text-xs font-bold transition-all uppercase group"
-                    onClick={() => alert("Publish functionality coming soon!")}
+                    onClick={handlePublishClick}
                   >
                     <Upload size={16} className="group-hover:text-purple-400 transition-colors" />
                     Publish
@@ -511,6 +559,28 @@ export function TemplatesSection() {
           </>
         )}
       </AnimatePresence>
+
+      <PublishModal
+        open={publishModalOpen}
+        onClose={() => setPublishModalOpen(false)}
+        onPublish={handlePublish}
+        loading={publishing}
+      />
+
+      <Snackbar 
+        open={!!notification} 
+        autoHideDuration={6000} 
+        onClose={() => setNotification(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert 
+          onClose={() => setNotification(null)} 
+          severity={notification?.type} 
+          sx={{ width: '100%' }}
+        >
+          {notification?.message}
+        </Alert>
+      </Snackbar>
     </div>
   );
 }
