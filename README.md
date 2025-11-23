@@ -1,166 +1,331 @@
-# ⚡ Sui-FlashBuilder
+# ⚡ SAIL - Sui Automated Investment Lab
 
 [![Sui Network](https://img.shields.io/badge/Sui-Network-blue?style=flat-square)](https://sui.io/)
+[![Testnet](https://img.shields.io/badge/Network-Testnet%20%2B%20Mainnet-green?style=flat-square)](https://sui.io/)
 
-Sui-FlashBuilder est une infrastructure DeFi **No-Code** révolutionnaire sur la blockchain Sui.
-Elle permet à quiconque de **construire, visualiser et exécuter des stratégies d'arbitrage complexes (Flash Loans)** via une interface *Drag-and-Drop*, **sans écrire une seule ligne de code Move**.
+**SAIL** is a revolutionary **No-Code DeFi Strategy Builder** on the Sui blockchain. It empowers anyone to **build, visualize, simulate, and execute complex strategies including Flash Loans** through an intuitive interface—**without writing a single line of Move code**.
 
-En plus d'être un outil d'exécution, c'est une **Marketplace de Stratégies**.
-Les créateurs (MEV searchers, traders) peuvent encapsuler leur logique dans des **Custom Blocks**, les chiffrer et les vendre de manière sécurisée.
-
----
-
-## 🚀 Pourquoi Sui-FlashBuilder ?
-
-Sur Ethereum, les Flash Loans sont réservés aux développeurs Solidity experts.
-Sur Sui, grâce aux **Programmable Transaction Blocks (PTB)**, ils deviennent accessibles à tous.
-
-### Problèmes résolus
-
-| Problème                                   | Solution apportée                                                |
-| ------------------------------------------ | ---------------------------------------------------------------- |
-| Complexité technique du pattern Hot Potato | L’UI gère automatiquement l’emprunt et le remboursement atomique |
-| Impossibilité de monétiser son alpha       | Chiffrement et vente sécurisée via NFTs / Seal                   |
-| Risque de perte en cas d’échec             | Transaction annulée automatiquement (atomicité PTB)              |
+Beyond being an execution platform, SAIL is also a **Strategy Marketplace** where creators (MEV searchers, traders) can encrypt their strategies using **Seal** and **Walrus**, then sell them securely to other users.
 
 ---
 
-## 🏗️ Architecture Technique
+## 🚀 Why SAIL?
 
-### 1. Moteur PTB (Client-Side)
+On Ethereum, Flash Loans are reserved for expert Solidity developers. On Sui, thanks to **Programmable Transaction Blocks (PTB)**, they become accessible to everyone.
 
-Pas de smart contract central.
-L’utilisateur assemble côté client une seule transaction avec toutes les actions DeFi.
+### Problems Solved
 
-* **Entrée** : JSON généré par l’interface
-* **Sortie** : PTB atomique envoyé on-chain
-* **Sécurité** : Pattern *Hot Potato* — obligatoire bloc de remboursement
-
-### 2. Intégrations DeFi
-
-**Liquidité (Flash Loans)**
-
-* Scallop
-* Bucket
-* DeepBook
-
-**Swaps (DEXs)**
-
-* Cetus (CLMM)
-* DeepBook
-* Smart Router
-
-### 3. Stockage & Confidentialité
-
-| Technologie | Usage                                         |
-| ----------- | --------------------------------------------- |
-| Walrus      | Stockage immuable des stratégies (JSON Blobs) |
-| Seal        | Chiffrement et contrôle d'accès via NFT       |
+| Problem | Solution |
+|---------|----------|
+| Technical complexity of Hot Potato pattern | UI automatically handles atomic borrow/repay |
+| Inability to monetize alpha strategies | Secure encryption & sale via Seal + Walrus |
+| Risk of loss on failed strategies | Automatic transaction rollback (PTB atomicity) |
+| Limited protocol support | Multi-protocol integration with custom block support |
+| Network fragmentation | Hybrid network support (Testnet marketplace + Mainnet execution) |
 
 ---
 
-## 🛠️ Stack Technologique
+## 🏗️ Architecture
+
+### 1. PTB Engine (Client-Side)
+
+No central smart contract required. Users assemble a single atomic transaction client-side with all DeFi actions.
+
+- **Input**: JSON strategy definition
+- **Output**: Atomic PTB sent on-chain
+- **Security**: Hot Potato pattern enforces mandatory repayment
+
+### 2. DeFi Integrations
+
+**Flash Loans**
+- **Navi Protocol** - Primary flash loan provider
+
+**DEX Swaps**
+- **Cetus** - Concentrated liquidity swaps via CLMM SDK
+- **Turbos Finance** - Custom block integration for advanced swaps
+
+**Custom Blocks**
+- Support for arbitrary Move calls
+- Type-safe argument handling
+- Automatic dependency resolution via topological sorting
+
+### 3. Storage & Privacy
+
+| Technology | Usage |
+|------------|-------|
+| Walrus | Immutable storage for encrypted strategy JSON blobs |
+| Seal | Encryption and NFT-based access control |
+| Move Whitelist Contract | On-chain access management for marketplace |
+
+### 4. Hybrid Network Architecture
+
+SAIL operates on **two networks simultaneously**:
+
+- **Testnet**: Marketplace, whitelist payments, strategy publishing
+- **Mainnet**: Strategy execution, real DeFi operations
+
+The frontend automatically prompts users to switch networks based on the action.
+
+---
+
+## 🛠️ Tech Stack
 
 **Frontend**
-
-* React, TypeScript, TailwindCSS
-* React Flow (visualisation nodale)
+- React 19, TypeScript, Next.js 16
+- TailwindCSS v4
+- Framer Motion (animations)
+- Material-UI (components)
+- Lucide React (icons)
 
 **Blockchain Interaction**
-
-* `@mysten/dapp-kit` (wallet)
-* `@mysten/sui` (PTB construction)
+- `@mysten/dapp-kit` - Wallet integration
+- `@mysten/sui` - PTB construction
+- `@mysten/seal` - Encryption/decryption
 
 **DeFi SDKs**
+- `navi-sdk` - Flash loans
+- `@cetusprotocol/cetus-sui-clmm-sdk` - DEX swaps
 
-* `@naviprotocol/lending`
-* `@scallop-io/sui-scallop-sdk`
-* `@cetusprotocol/cetus-sui-clmm-sdk`
-* `@mysten/deepbook-v3`
+**Backend**
+- Node.js + Express
+- TypeScript
+- Walrus SDK (storage)
+- Seal SDK (encryption)
 
-**Infrastructure**
-
-* Walrus SDK (stockage)
-* Seal SDK (chiffrement / déchiffrement conditionnel)
+**Move Contracts**
+- Whitelist management module
+- Access control for marketplace
 
 ---
 
-## 📦 Installation & Démarrage
+## 📦 Installation & Setup
 
-### Prérequis
+### Prerequisites
 
-* Node.js ≥ 18
-* pnpm (recommandé)
-* Wallet Sui (Sui Wallet, Ethos, etc.)
-* Fonds Testnet
+- Node.js ≥ 18
+- pnpm (recommended)
+- Sui Wallet
+- Testnet + Mainnet funds
 
 ### Installation
 
 ```bash
 git clone <repo-url>
-cd sui-flashbuilder
+cd hackathon_SUI
 pnpm install
 ```
 
 ### Configuration
 
-Créer un fichier `.env` à la racine du projet (variables Sui, Walrus, Seal, etc.)
+#### Backend (.env)
 
-### Lancer l'app
+Create `backend/.env`:
 
-```bash
-pnpm dev
+```env
+# Move Package Configuration
+PACKAGE_ID=<your-package-id>
+WHITELIST_ID=<your-whitelist-object-id>
+CAP_ID=<your-admin-cap-id>
+ADMIN_PRIVATE_KEY=<admin-private-key>
+
+# Walrus Configuration
+WALRUS_PUBLISHER_URL=https://publisher.walrus-testnet.walrus.space
+WALRUS_AGGREGATOR_URL=https://aggregator.walrus-testnet.walrus.space
+
+# API Configuration
+PORT=8000
 ```
 
-Accessible sur : `http://localhost:3000`
+### Launch
+
+**Backend:**
+```bash
+cd backend
+pnpm start:api
+```
+
+**Frontend:**
+```bash
+cd frontend
+pnpm run dev
+```
+
+Access the app at: `http://localhost:3000`
 
 ---
 
-## 💡 Guide d'Utilisation (Scénario Hackathon)
+## 💡 User Guide
 
-1️⃣ **Créer une stratégie**
+### 1️⃣ Building a Strategy
 
-* Blocs : Flash Loan (Navi) → Swap (Cetus) → Swap (DeepBook) → Rembourser
-* Connecter le *Reçu de Prêt* (Hot Potato) au bloc de remboursement
+1. Navigate to the **Builder** section
+2. Add nodes from the sidebar:
+   - **Flash Borrow** (Navi Protocol)
+   - **DEX Swap** (Cetus)
+   - **Custom Block** (Turbos or any Move call)
+   - **Coin Operations** (Merge/Split)
+   - **Flash Repay** (Navi Protocol)
+3. Connect nodes by defining edges in the JSON
+4. Configure each node's parameters
+5. **Critical**: Connect the loan receipt to the repay node (Hot Potato pattern)
 
-2️⃣ **Simuler**
+### 2️⃣ Simulating
 
-* Le système exécute `dryRunTransaction`
-* Retour : `Profit estimé : +5 SUI` ou échec
+1. Click "Execute Simulation"
+2. The system performs a `dryRun` on Mainnet
+3. View results:
+   - Estimated gas cost
+   - Profit/loss calculation
+   - Execution errors (if any)
 
-3️⃣ **Publier (Marketplace)**
+### 3️⃣ Publishing to Marketplace
 
-* Chiffrement via Seal
-* Upload sur Walrus
-* Mint d’un NFT contenant l'accès
+1. Click "Publish to Marketplace"
+2. Set name, description, price, and tags
+3. Strategy is encrypted with Seal
+4. Uploaded to Walrus for immutable storage
+5. Listed in the marketplace
+
+### 4️⃣ Purchasing Strategies
+
+1. Navigate to **Marketplace**
+2. Pay 0.5 SUI to join the whitelist (one-time, Testnet)
+3. Browse available strategies
+4. Purchase and decrypt strategies
+5. Execute them from your **Templates** section
+
+### 5️⃣ Executing Strategies
+
+1. Go to **Templates** section
+2. Select a strategy
+3. Click "Run Strategy"
+4. Wallet prompts to switch to **Mainnet**
+5. Sign and execute the transaction
+6. View results in **History**
 
 ---
 
-## ⚠️ Avertissements & Risques
+## 🎯 Key Features
 
-* **Slippage & conditions de marché variables**
-* **Aucune perte de capital possible sur échec (atomicité)**
-* **Prototype non audité — à utiliser uniquement sur Testnet**
+### Strategy Builder
+- JSON-based strategy definition
+- Real-time validation
+- Automatic dependency resolution via topological sort
+- Type-safe node connections
+
+### Multi-Protocol Support
+- **Navi Protocol**: Flash loans with flexible repayment
+- **Cetus**: Concentrated liquidity swaps
+- **Turbos Finance**: Custom block integration
+- Extensible adapter system for new protocols
+
+### Custom Blocks
+- Define arbitrary Move calls
+- Support for complex type arguments
+- Vector construction (`make_vec`)
+- Shared object references
+- Multiple outputs with destructuring
+
+### Marketplace
+- Encrypted strategy storage (Seal + Walrus)
+- Whitelist-based access control
+- On-chain verification
+- Decentralized storage
+
+### Simulation Engine
+- Pre-execution dry runs
+- Gas estimation
+- Profit/loss calculation
+- Error detection and reporting
+
+### Execution History
+- Complete transaction logs
+- Step-by-step execution tracking
+- Success/failure analytics
+- SuiScan integration
 
 ---
 
-## 🤝 Contribution
+## 🔧 Advanced: Custom Blocks
 
-Pull Requests bienvenues !
+SAIL supports custom Move calls for advanced users. Example Turbos swap:
 
-Axes d'amélioration :
+```json
+{
+  "id": "turbos_swap",
+  "type": "CUSTOM",
+  "protocol": "CUSTOM",
+  "params": {
+    "target": "0xd02012c71c1a6a221e540c36c37c81e0224907fe1ee05bfe250025654ff17103::swap_router::swap_a_b_with_return_",
+    "arguments": [
+      { "type": "object", "object_id": "0x5eb2..." },
+      { "type": "make_vec", "input_ref": "borrow_1.coin_borrowed", "value_type": "0x2::coin::Coin<0x2::sui::SUI>" },
+      { "type": "pure", "value": "100000", "value_type": "u64" }
+    ],
+    "type_arguments": ["0x2::sui::SUI", "0x5d4b...::coin::COIN", "0x91bf...::fee3000bps::FEE3000BPS"]
+  },
+  "inputs": { "coin_in": "borrow_1.coin_borrowed" },
+  "outputs": [
+    { "id": "usdc_out", "type": "Coin<USDC>", "output_type": "COIN" },
+    { "id": "sui_remainder", "type": "Coin<SUI>", "output_type": "COIN" }
+  ]
+}
+```
 
-* Intégration de nouveaux protocoles (Suilend, Bluefin)
-* UX Builder (auto-connect des nœuds)
-* Graphiques de prix en temps réel
+**Key Points:**
+- Custom blocks must declare `inputs` and `outputs` for proper topological sorting
+- Type arguments must match the Move function signature exactly
+- Use `Coin<T>` wrapper types for `public_transfer` calls
+- Edges must connect outputs to inputs for dependency tracking
+
+See `BLOCKS_REFERENCE.md` for complete documentation.
 
 ---
 
-## 📜 Licence
+## ⚠️ Warnings & Risks
 
-Distribué sous licence **MIT**.
-Voir le fichier `LICENSE` pour plus d'informations.
+- **Market volatility**: Slippage and price changes can affect profitability
+- **No capital loss on failure**: Atomic transactions ensure all-or-nothing execution
+- **Testnet prototype**: Not audited, use at your own risk
+- **Network switching**: Ensure your wallet supports both Testnet and Mainnet
+- **Gas costs**: Mainnet execution requires real SUI for gas
 
 ---
+
+## 🤝 Contributing
+
+Pull requests are welcome! Areas for improvement:
+
+- New protocol adapters (Scallop, Bucket, DeepBook, Suilend, Bluefin)
+- UI/UX enhancements
+- Documentation
+- Testing coverage
+- Performance optimizations
+
+---
+
+## 📜 License
+
+Distributed under the **MIT License**.
+
+---
+
+## 🏆 Hackathon
 
 💙 Built with passion during the **Sui Hackathon**
+
+**Team**: PoCInnovation
+
+**Technologies**: Sui, Walrus, Seal, Navi Protocol, Cetus, Turbos Finance
+
+---
+
+## 📚 Additional Resources
+
+- [Blocks Reference](./BLOCKS_REFERENCE.md) - Complete node type documentation
+- [Implementation Summary](./IMPLEMENTATION_SUMMARY.md) - Technical deep dive
+- [Sui Documentation](https://docs.sui.io/)
+- [Walrus Documentation](https://docs.walrus.site/)
+- [Seal Documentation](https://docs.mystenlabs.com/seal/)
+- [Navi Protocol](https://naviprotocol.io/)
+- [Cetus Protocol](https://www.cetus.zone/)

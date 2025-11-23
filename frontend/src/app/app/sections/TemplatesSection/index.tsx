@@ -177,6 +177,7 @@ export function TemplatesSection() {
       signAndExecuteTransaction(
         {
           transaction: tx,
+          chain: 'sui:mainnet',
         },
         {
           onSuccess: (result) => {
