@@ -50,6 +50,49 @@ export function MarketplaceSection() {
         text: 'Workflow downloaded and saved to your templates!'
       });
     } catch (err: any) {
+      setMessage({ type: 'error', text: `Download failed: ${err.message}` });
+    } finally {
+      setPurchasing(null);
+    }
+  };
+
+  const handlePurchase = async (workflowId: string, templateIndex: number, templateName: string, priceSui: number) => {
+    if (!currentAccount) {
+      setMessage({ type: 'error', text: 'Please connect your wallet first' });
+      return;
+    }
+
+    setPurchasing(workflowId);
+    setMessage(null);
+
+    try {
+      // 1. Purchase template access (on-chain payment)
+      setMessage({
+        type: 'info',
+        text: `Purchasing access for ${priceSui} SUI... (check wallet for signature request)`
+      });
+
+      await purchaseTemplateAccess(templateIndex, templateName, priceSui);
+
+      setMessage({
+        type: 'success',
+        text: 'Access purchased! Now downloading workflow...'
+      });
+
+      // 2. Decrypt and save workflow (Seal will verify template-specific access on-chain)
+      const decryptedWorkflow = await decryptWorkflow(workflowId);
+
+      // Save to localStorage
+      const existingWorkflows = localStorage.getItem('purchased_workflows');
+      const workflows = existingWorkflows ? JSON.parse(existingWorkflows) : [];
+      workflows.push(decryptedWorkflow);
+      localStorage.setItem('purchased_workflows', JSON.stringify(workflows));
+
+      setMessage({
+        type: 'success',
+        text: 'Workflow downloaded and saved to your templates!'
+      });
+    } catch (err: any) {
       // Check for specific errors
       if (err.message?.includes('access') || err.message?.includes('not authorized')) {
         setMessage({
@@ -186,6 +229,23 @@ export function MarketplaceSection() {
                     <div className="text-white font-pixel text-xl">
                       {workflow.price_sui} SUI
                     </div>
+                    {ownedWorkflowIds.has(workflow.id) ? (
+                      <button
+                        onClick={() => handleDownload(workflow.id, workflow.name)}
+                        disabled={purchasing === workflow.id}
+                        className="px-6 py-2 bg-green-500/20 border-2 border-green-500 hover:bg-green-500 hover:text-black transition-colors font-pixel text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {purchasing === workflow.id ? 'DOWNLOADING...' : '✓ DOWNLOAD'}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handlePurchase(workflow.id, index, workflow.name, workflow.price_sui)}
+                        disabled={purchasing === workflow.id}
+                        className="px-6 py-2 bg-walrus-mint/20 border-2 border-walrus-mint hover:bg-walrus-mint hover:text-black transition-colors font-pixel text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {purchasing === workflow.id ? 'PURCHASING...' : 'BUY'}
+                      </button>
+                    )}
                     <button
                       onClick={() => handlePurchase(workflow.id, index, workflow.name, workflow.price_sui)}
                       disabled={purchasing === workflow.id}
