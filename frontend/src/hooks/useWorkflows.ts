@@ -242,7 +242,6 @@ export function useWorkflowActions() {
 
       const transaction = Transaction.from(txBytes);
 
-      // For marketplace purchases, use testnet (hardcoded)
       const signedTx = await signTransaction({
         transaction,
         chain: 'sui:testnet',
