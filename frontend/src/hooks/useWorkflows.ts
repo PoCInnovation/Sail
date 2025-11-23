@@ -209,9 +209,12 @@ export function useWorkflowActions() {
 
       // 1. Build template purchase transaction
       console.log('📝 Building template purchase transaction...');
+<<<<<<< HEAD
       console.log('   API URL:', `${API_BASE_URL}/seal/build-template-purchase`);
       console.log('   Request body:', { address: currentAccount.address, templateIndex });
 
+=======
+>>>>>>> 0a83413 (fix: marketplace)
       const buildResponse = await fetch(`${API_BASE_URL}/seal/build-template-purchase`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -221,16 +224,10 @@ export function useWorkflowActions() {
         }),
       });
 
-      console.log('   Response status:', buildResponse.status);
-      console.log('   Response ok:', buildResponse.ok);
-
       const buildResult = await buildResponse.json();
 
-      console.log('📦 Build response:', buildResult);
-
       if (!buildResult.success) {
-        console.error('❌ Build failed:', buildResult);
-        throw new Error(buildResult.error || buildResult.message || 'Failed to build purchase transaction');
+        throw new Error(buildResult.error || 'Failed to build purchase transaction');
       }
 
       console.log('💵 Template Price:', buildResult.data.price_sui, 'SUI');
@@ -264,44 +261,20 @@ export function useWorkflowActions() {
 
       // 3. Confirm purchase
       console.log('🔐 Confirming template purchase...');
+      const confirmResponse = await fetch(`${API_BASE_URL}/seal/confirm-template-purchase`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address: currentAccount.address,
+          templateIndex,
+          transactionDigest: purchaseResult.digest,
+        }),
+      });
 
-      // Wait a bit for the transaction to be indexed
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const confirmResult = await confirmResponse.json();
 
-      let confirmResult;
-      let retries = 5;
-
-      while (retries > 0) {
-        try {
-          const confirmResponse = await fetch(`${API_BASE_URL}/seal/confirm-template-purchase`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              address: currentAccount.address,
-              templateIndex,
-              transactionDigest: purchaseResult.digest,
-            }),
-          });
-
-          confirmResult = await confirmResponse.json();
-
-          if (confirmResult.success) {
-            break;
-          }
-
-          console.log(`⚠️ Confirmation failed: ${confirmResult.error}. Retrying... (${retries} attempts left)`);
-        } catch (err) {
-          console.log(`⚠️ Confirmation network error. Retrying... (${retries} attempts left)`);
-        }
-
-        retries--;
-        if (retries > 0) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-      }
-
-      if (!confirmResult || !confirmResult.success) {
-        throw new Error(confirmResult?.error || 'Failed to confirm purchase after multiple attempts');
+      if (!confirmResult.success) {
+        throw new Error(confirmResult.error || 'Failed to confirm purchase');
       }
 
       console.log('✅ Successfully purchased template access!');
