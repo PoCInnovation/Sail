@@ -3,8 +3,8 @@ import { SuiClient } from '@mysten/sui/client';
 import { Transaction } from '@mysten/sui/transactions';
 import { fromHex } from '@mysten/sui/utils';
 
-const PACKAGE_ID = '0x0fe074f026b27ea8617d326dc732b635a762bb64e23b943bafc7ac49f8e9eb52';
-const WHITELIST_ID = '0x7d4fdefe79f2b7332672e2289b331dcc445a47d2379a39bed95adbe91e5fcc7d';
+import { ADMIN_CONFIG } from '../config/admin';
+
 const PUBLISHER = 'https://publisher.walrus-testnet.walrus.space';
 const AGGREGATOR = 'https://aggregator.walrus-testnet.walrus.space';
 
@@ -48,7 +48,8 @@ export class SealWalrusService {
     const nonce = 'file-' + Date.now();
 
     // Build ID: [whitelistObjectId][nonce]
-    const cleanWhitelistId = WHITELIST_ID.startsWith('0x') ? WHITELIST_ID.slice(2) : WHITELIST_ID;
+    // Build ID: [whitelistObjectId][nonce]
+    const cleanWhitelistId = ADMIN_CONFIG.WHITELIST_ID.startsWith('0x') ? ADMIN_CONFIG.WHITELIST_ID.slice(2) : ADMIN_CONFIG.WHITELIST_ID;
     const whitelistIdBytes = fromHex(cleanWhitelistId);
     const nonceBytes = new TextEncoder().encode(nonce);
     const idBytes = new Uint8Array([...whitelistIdBytes, ...nonceBytes]);
@@ -57,7 +58,7 @@ export class SealWalrusService {
     // Encrypt with Seal
     const result = await this.sealClient.encrypt({
       threshold: 1,
-      packageId: PACKAGE_ID,
+      packageId: ADMIN_CONFIG.PACKAGE_ID,
       id: hexId,
       data: new Uint8Array(data),
     });
@@ -74,9 +75,10 @@ export class SealWalrusService {
       : dataWalrusResult.alreadyCertified.blobId;
 
     // Create metadata (without backupKey for security)
+    // Create metadata (without backupKey for security)
     const metadata: Metadata = {
-      packageId: PACKAGE_ID,
-      whitelistId: WHITELIST_ID,
+      packageId: ADMIN_CONFIG.PACKAGE_ID,
+      whitelistId: ADMIN_CONFIG.WHITELIST_ID,
       nonce,
       dataBlobId,
       timestamp: Date.now(),
@@ -166,7 +168,7 @@ export class SealWalrusService {
   async createSessionKey(address: string): Promise<SessionKey> {
     return await SessionKey.create({
       address,
-      packageId: PACKAGE_ID,
+      packageId: ADMIN_CONFIG.PACKAGE_ID,
       ttlMin: 10,
       suiClient: this.suiClient,
     });

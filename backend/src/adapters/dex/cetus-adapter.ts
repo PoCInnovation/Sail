@@ -23,7 +23,7 @@ export class CetusAdapter extends BaseDexAdapter {
       const config = this.getConfig();
       this.sdk = new CetusClmmSDK({
         fullRpcUrl: "https://fullnode.mainnet.sui.io:443",
-        simulationAccount: { address: "0x0000000000000000000000000000000000000000000000000000000000000000" },
+        simulationAccount: { address: "0x3c7ea737b5f0390399892c70e899498f819e7593eabad27466acfc59fedb979d" },
       } as any); // Using any to bypass strict type check for now, as we only need RPC for pre-swap
     } catch (error) {
       console.warn("Cetus SDK initialization failed. Adapter will work in mock mode.");

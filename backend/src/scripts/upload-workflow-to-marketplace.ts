@@ -65,10 +65,14 @@ async function uploadWorkflow(filePath: string) {
     console.log('📝 Workflow ID:', result.data.id);
     console.log('🔐 Metadata Blob ID:', result.data.metadataBlobId);
     console.log('📦 Data Blob ID:', result.data.dataBlobId);
-    console.log('💰 Price:', result.data.price_sui, 'SUI');
+    console.log('💰 Price:', result.data.price_sui ?? 'N/A', 'SUI');
     console.log('\n🌐 Walrus URLs:');
-    console.log('   Metadata:', result.data.walrusUrls.metadata);
-    console.log('   Data:', result.data.walrusUrls.data);
+    if (result.data.walrusUrls) {
+      console.log('   Metadata:', result.data.walrusUrls.metadata);
+      console.log('   Data:', result.data.walrusUrls.data);
+    } else {
+      console.log('   ⚠️  Walrus URLs not returned by server');
+    }
     console.log('\n═══════════════════════════════════════\n');
     console.log('✨ Your workflow is now available on the marketplace!');
     console.log('   Others can purchase it for', result.data.price_sui, 'SUI');
