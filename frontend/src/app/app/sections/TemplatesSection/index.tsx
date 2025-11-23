@@ -3,8 +3,9 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
 import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import { ExecutionConsole, Log, ExecutionStatus } from "./components/ExecutionConsole";
 import { Transaction } from "@mysten/sui/transactions";
-import { Play, Edit, Trash2, Upload, Copy, Layers, Calendar, User, X, GripVertical } from "lucide-react";
+import { Play, Edit, Trash2, Upload, Copy, Layers, Calendar, User, X, GripVertical, Loader2 } from "lucide-react";
 import type { Strategy } from "@/hooks/useWorkflows";
 import { api } from "@/services/api";
 
@@ -12,8 +13,17 @@ export function TemplatesSection() {
   const currentAccount = useCurrentAccount();
   const [templates, setTemplates] = useState<Strategy[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<Strategy | null>(null);
+  
+  // Execution State
+  const [executionLogs, setExecutionLogs] = useState<Log[]>([]);
+  const [executionStatus, setExecutionStatus] = useState<ExecutionStatus>('idle');
+  const [txDigest, setTxDigest] = useState<string | undefined>();
 
   const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
+
+  const addLog = (message: string, type: Log['type'] = 'info') => {
+    setExecutionLogs(prev => [...prev, { timestamp: Date.now(), message, type }]);
+  };
 
   useEffect(() => {
     const loadTemplates = () => {
@@ -90,19 +100,23 @@ export function TemplatesSection() {
       return;
     }
 
-    // Check network
-    // Note: We assume Mainnet is 'sui:mainnet'
-    // You might need to import useCurrentWallet or similar to get the chain
-    // For now, we'll rely on the user checking their wallet, but we can add a console log
-    console.log("Current account:", currentAccount);
+    // Reset state
+    setExecutionStatus('building');
+    setExecutionLogs([]);
+    setTxDigest(undefined);
+    addLog(`Initializing strategy execution: ${selectedTemplate.meta.name}`, 'info');
+    addLog(`Network: Mainnet`, 'info');
+    addLog(`Sender: ${currentAccount.address}`, 'info');
 
     try {
       // 1. Build transaction
+      addLog("Building transaction on backend...", 'info');
       const buildRes = await api.buildTransaction(selectedTemplate, currentAccount.address);
       
       if (!buildRes.success || !buildRes.transactionBytes) {
         throw new Error(buildRes.error || "Failed to build transaction");
       }
+      addLog("Transaction built successfully.", 'success');
 
       // 2. Decode base64 to Uint8Array
       const binaryString = atob(buildRes.transactionBytes);
@@ -110,8 +124,12 @@ export function TemplatesSection() {
       for (let i = 0; i < binaryString.length; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
+      addLog(`Transaction size: ${bytes.length} bytes`, 'info');
 
       // 3. Sign and Execute
+      setExecutionStatus('signing');
+      addLog("Requesting wallet signature...", 'info');
+      
       const tx = Transaction.from(bytes);
 
       signAndExecuteTransaction(
@@ -121,17 +139,24 @@ export function TemplatesSection() {
         {
           onSuccess: (result) => {
             console.log("Transaction executed:", result);
-            alert(`Strategy executed successfully! Digest: ${result.digest}`);
+            console.log(`SuiScan URL: https://suiscan.xyz/mainnet/tx/${result.digest}`);
+            setExecutionStatus('success');
+            setTxDigest(result.digest);
+            addLog("Transaction submitted to the network!", 'success');
+            addLog(`Digest: ${result.digest}`, 'success');
+            addLog("Execution completed successfully.", 'success');
           },
           onError: (error) => {
             console.error("Execution failed:", error);
-            alert(`Execution failed: ${error.message}`);
+            setExecutionStatus('error');
+            addLog(`Execution failed: ${error.message}`, 'error');
           },
         }
       );
     } catch (error: any) {
       console.error("Run strategy error:", error);
-      alert(`Failed to run strategy: ${error.message}`);
+      setExecutionStatus('error');
+      addLog(`Error: ${error.message}`, 'error');
     }
   };
 
@@ -264,7 +289,7 @@ export function TemplatesSection() {
           })}
         </div>
       )}
-
+      
       {/* Slide-in Details Panel */}
       <AnimatePresence>
         {selectedTemplate && (
@@ -274,7 +299,13 @@ export function TemplatesSection() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setSelectedTemplate(null)}
+              onClick={() => {
+                if (executionStatus === 'building' || executionStatus === 'signing' || executionStatus === 'executing') {
+                  if (!window.confirm("Execution in progress. Are you sure you want to close?")) return;
+                }
+                setSelectedTemplate(null);
+                setExecutionStatus('idle');
+              }}
               className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40"
             />
 
@@ -284,130 +315,197 @@ export function TemplatesSection() {
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="fixed right-0 top-0 bottom-0 w-full max-w-2xl bg-[#0a0f1e] border-l-2 border-gray-800 z-50 shadow-2xl flex flex-col"
+              className="fixed right-0 top-0 bottom-0 w-full max-w-2xl bg-[#050a14] border-l border-blue-500/30 z-50 shadow-[0_0_50px_rgba(0,0,0,0.8)] flex flex-col"
             >
+              {/* Decorative Background Grid */}
+              <div className="absolute inset-0 bg-[linear-gradient(rgba(18,24,38,0.5)_1px,transparent_1px),linear-gradient(90deg,rgba(18,24,38,0.5)_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none opacity-20" />
+
               {/* Panel Header */}
-              <div className="p-8 border-b border-gray-800 flex justify-between items-start bg-[#0a0f1e]">
+              <div className="p-8 border-b border-white/10 flex justify-between items-start bg-[#050a14]/90 backdrop-blur relative z-10">
                 <div>
-                  <h2 className="text-3xl font-pixel text-white mb-2">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="px-2 py-1 bg-blue-500/10 border border-blue-500/30 text-[10px] font-mono text-blue-400 uppercase tracking-wider">
+                      Strategy Protocol
+                    </div>
+                    {selectedTemplate.version && (
+                      <div className="px-2 py-1 bg-purple-500/10 border border-purple-500/30 text-[10px] font-mono text-purple-400 uppercase tracking-wider">
+                        v{selectedTemplate.version}
+                      </div>
+                    )}
+                  </div>
+                  <h2 className="text-3xl font-pixel text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400 mb-4 tracking-wide">
                     {selectedTemplate.meta.name}
                   </h2>
-                  <div className="flex items-center gap-4 text-xs font-mono text-gray-500">
-                    <div className="flex items-center gap-1">
-                      <User size={12} />
-                      <span>{selectedTemplate.meta.author || "Anonymous"}</span>
+                  <div className="flex items-center gap-6 text-xs font-mono text-gray-500">
+                    <div className="flex items-center gap-2">
+                      <User size={14} className="text-blue-500" />
+                      <span className="text-gray-400">{selectedTemplate.meta.author || "Anonymous"}</span>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Calendar size={12} />
-                      <span>{new Date(selectedTemplate.meta.created_at).toLocaleString()}</span>
+                    <div className="flex items-center gap-2">
+                      <Calendar size={14} className="text-blue-500" />
+                      <span className="text-gray-400">{new Date(selectedTemplate.meta.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>
                 </div>
                 <button 
                   onClick={() => setSelectedTemplate(null)}
-                  className="p-2 hover:bg-gray-800 text-gray-500 hover:text-white transition-colors"
+                  className="group p-2 hover:bg-red-500/10 border border-transparent hover:border-red-500/50 transition-all duration-300"
                 >
-                  <X size={24} />
+                  <X size={24} className="text-gray-500 group-hover:text-red-400" />
                 </button>
               </div>
 
               {/* Panel Content */}
-              <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                <div className="space-y-8">
-                  {/* Description */}
-                  <div className="bg-[#0f1629] border border-gray-800 p-6 relative">
+              <div className="flex-1 overflow-y-auto p-8 custom-scrollbar flex flex-col gap-8 relative z-10">
+                
+                {/* Execution Console (Visible when active) */}
+                <AnimatePresence>
+                  {executionStatus !== 'idle' && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -20, height: 0 }}
+                      animate={{ opacity: 1, y: 0, height: 'auto' }}
+                      exit={{ opacity: 0, y: -20, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <ExecutionConsole 
+                        logs={executionLogs} 
+                        status={executionStatus} 
+                        txDigest={txDigest}
+                        onClose={() => setExecutionStatus('idle')}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Description Box */}
+                <div className="relative group">
+                  <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded opacity-50 group-hover:opacity-100 transition duration-500 blur"></div>
+                  <div className="relative bg-[#0a0f1e] border border-white/10 p-6">
                     <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
-                    <h3 className="font-mono text-xs text-blue-400 uppercase mb-2">Description</h3>
+                    <h3 className="font-mono text-[10px] text-blue-400 uppercase mb-3 tracking-widest flex items-center gap-2">
+                      <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                      System Description
+                    </h3>
                     <p className="text-sm text-gray-300 font-mono leading-relaxed">
-                      {selectedTemplate.meta.description || "No description provided."}
+                      {selectedTemplate.meta.description || "No description provided for this strategy."}
                     </p>
                   </div>
+                </div>
 
-                  {/* Stats Grid */}
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="bg-[#0a0a0a] border border-gray-800 p-4 text-center">
-                      <div className="text-2xl font-mono text-white font-bold mb-1">{selectedTemplate.nodes.length}</div>
-                      <div className="text-[10px] text-gray-500 uppercase font-mono">Nodes</div>
+                {/* Stats Grid */}
+                <div className="grid grid-cols-3 gap-4">
+                  {[
+                    { label: "Nodes", value: selectedTemplate.nodes.length, icon: Layers },
+                    { label: "Edges", value: selectedTemplate.edges.length, icon: GripVertical },
+                    { label: "Complexity", value: "LOW", icon: Layers } // Placeholder logic
+                  ].map((stat, i) => (
+                    <div key={i} className="bg-[#0a0f1e] border border-white/5 p-4 relative group hover:border-blue-500/30 transition-colors">
+                      {/* Corner Accents */}
+                      <div className="absolute top-0 left-0 w-2 h-2 border-l border-t border-white/20 group-hover:border-blue-500 transition-colors" />
+                      <div className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-white/20 group-hover:border-blue-500 transition-colors" />
+                      
+                      <div className="flex justify-between items-start mb-2">
+                        <stat.icon size={14} className="text-gray-600 group-hover:text-blue-400 transition-colors" />
+                        <div className="text-[10px] text-gray-600 font-mono uppercase tracking-wider">{stat.label}</div>
+                      </div>
+                      <div className="text-2xl font-mono text-white font-bold">{stat.value}</div>
                     </div>
-                    <div className="bg-[#0a0a0a] border border-gray-800 p-4 text-center">
-                      <div className="text-2xl font-mono text-white font-bold mb-1">{selectedTemplate.edges.length}</div>
-                      <div className="text-[10px] text-gray-500 uppercase font-mono">Edges</div>
-                    </div>
-                    <div className="bg-[#0a0a0a] border border-gray-800 p-4 text-center">
-                      <div className="text-2xl font-mono text-white font-bold mb-1">{selectedTemplate.version}</div>
-                      <div className="text-[10px] text-gray-500 uppercase font-mono">Version</div>
-                    </div>
-                  </div>
+                  ))}
+                </div>
 
-                  {/* Sequence Preview */}
-                  <div>
-                    <h3 className="font-mono text-sm text-white uppercase mb-4 flex items-center gap-2">
-                      <Layers size={16} className="text-blue-500" />
-                      Execution Sequence
-                    </h3>
-                    <div className="space-y-3">
-                      {selectedTemplate.nodes.map((node: any, i: number) => (
-                        <div key={i} className="flex items-center gap-4 p-4 bg-[#0a0a0a] border border-gray-800 hover:border-gray-700 transition-colors group">
-                          <div className="w-8 h-8 flex items-center justify-center bg-gray-900 text-gray-500 font-mono text-xs border border-gray-800 group-hover:border-blue-500/50 group-hover:text-blue-400 transition-colors">
-                            {i + 1}
-                          </div>
-                          <div>
-                            <div className="text-sm font-mono text-blue-300 font-bold">{node.type}</div>
-                            <div className="text-xs font-mono text-gray-600">{node.protocol}</div>
-                          </div>
-                          {/* Params Preview (Simplified) */}
-                          <div className="ml-auto text-right">
-                            {node.params.asset && (
-                              <div className="text-xs font-mono text-gray-500">
-                                {node.params.asset.split('::').pop()}
-                              </div>
-                            )}
-                            {node.params.amount && (
-                              <div className="text-xs font-mono text-gray-500">
-                                {(parseInt(node.params.amount) / 1_000_000_000).toFixed(2)} SUI
-                              </div>
-                            )}
+                {/* Execution Sequence */}
+                <div>
+                  <h3 className="font-mono text-sm text-white uppercase mb-6 flex items-center gap-2 border-b border-white/10 pb-2">
+                    <Layers size={16} className="text-blue-500" />
+                    Execution Sequence
+                  </h3>
+                  <div className="relative space-y-4 pl-4">
+                    {/* Circuit Line */}
+                    <div className="absolute left-[23px] top-4 bottom-4 w-0.5 bg-gradient-to-b from-blue-500/50 via-purple-500/50 to-transparent" />
+
+                    {selectedTemplate.nodes.map((node: any, i: number) => (
+                      <div key={i} className="relative flex items-center gap-4 group">
+                        {/* Node Number */}
+                        <div className="relative z-10 w-12 h-12 flex shrink-0 items-center justify-center bg-[#0a0f1e] border border-white/10 group-hover:border-blue-500 group-hover:shadow-[0_0_15px_rgba(59,130,246,0.3)] transition-all duration-300">
+                          <span className="font-pixel text-xs text-gray-500 group-hover:text-blue-400">{i + 1}</span>
+                        </div>
+
+                        {/* Node Card */}
+                        <div className="flex-1 bg-[#0a0f1e] border border-white/5 p-4 group-hover:bg-white/[0.02] group-hover:border-blue-500/30 transition-all duration-300 relative overflow-hidden">
+                          {/* Scanline effect on hover */}
+                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-shimmer pointer-events-none" />
+                          
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="text-xs font-mono text-blue-400 mb-1">{node.protocol}</div>
+                              <div className="text-sm font-bold font-mono text-white tracking-wide">{node.type}</div>
+                            </div>
+                            {/* Params Preview */}
+                            <div className="text-right">
+                              {node.params.amount && (
+                                <div className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">
+                                  {(parseInt(node.params.amount) / 1_000_000_000).toFixed(2)} SUI
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
 
               {/* Panel Footer Actions */}
-              <div className="p-8 border-t border-gray-800 bg-[#0a0f1e] grid grid-cols-2 gap-4">
-                <button 
-                  className="col-span-2 flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-500 text-white p-4 font-mono text-sm font-bold transition-colors uppercase tracking-wider"
-                  onClick={handleRunStrategy}
-                >
-                  <Play size={18} />
-                  Run Strategy
-                </button>
+              <div className="p-8 border-t border-white/10 bg-[#050a14] relative z-20">
+                <div className="grid grid-cols-2 gap-4">
+                  <button 
+                    className="col-span-2 relative overflow-hidden group bg-blue-600 hover:bg-blue-500 text-white p-4 font-mono text-sm font-bold transition-all uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handleRunStrategy}
+                    disabled={executionStatus === 'building' || executionStatus === 'signing' || executionStatus === 'executing'}
+                  >
+                    <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20" />
+                    <div className="relative flex items-center justify-center gap-3">
+                      {executionStatus === 'idle' || executionStatus === 'success' || executionStatus === 'error' ? (
+                        <>
+                          <Play size={18} className="fill-current" />
+                          Run Strategy
+                        </>
+                      ) : (
+                        <>
+                          <Loader2 size={18} className="animate-spin" />
+                          Running...
+                        </>
+                      )}
+                    </div>
+                  </button>
+                  
+                  <button 
+                    className="flex items-center justify-center gap-2 bg-transparent border border-white/10 hover:border-white/30 hover:bg-white/5 text-gray-300 p-3 font-mono text-xs font-bold transition-all uppercase group"
+                    onClick={() => alert("Edit functionality coming soon!")}
+                  >
+                    <Edit size={16} className="group-hover:text-blue-400 transition-colors" />
+                    Edit
+                  </button>
+                  
+                  <button 
+                    className="flex items-center justify-center gap-2 bg-transparent border border-white/10 hover:border-white/30 hover:bg-white/5 text-gray-300 p-3 font-mono text-xs font-bold transition-all uppercase group"
+                    onClick={() => alert("Publish functionality coming soon!")}
+                  >
+                    <Upload size={16} className="group-hover:text-purple-400 transition-colors" />
+                    Publish
+                  </button>
+                </div>
                 
-                <button 
-                  className="flex items-center justify-center gap-2 bg-[#1a1a1a] hover:bg-[#252525] border border-gray-700 text-gray-300 p-3 font-mono text-xs font-bold transition-colors uppercase"
-                  onClick={() => alert("Edit functionality coming soon!")}
-                >
-                  <Edit size={16} />
-                  Edit
-                </button>
-                
-                <button 
-                  className="flex items-center justify-center gap-2 bg-[#1a1a1a] hover:bg-[#252525] border border-gray-700 text-gray-300 p-3 font-mono text-xs font-bold transition-colors uppercase"
-                  onClick={() => alert("Publish functionality coming soon!")}
-                >
-                  <Upload size={16} />
-                  Publish
-                </button>
-
-                <button 
-                  className="col-span-2 flex items-center justify-center gap-2 text-red-500 hover:text-red-400 p-2 font-mono text-xs transition-colors uppercase mt-2"
-                  onClick={() => handleDelete(selectedTemplate.id)}
-                >
-                  <Trash2 size={14} />
-                  Delete Strategy
-                </button>
+                <div className="mt-6 flex justify-center">
+                   <button 
+                    className="flex items-center gap-2 text-red-500/70 hover:text-red-400 text-[10px] font-mono uppercase tracking-widest transition-colors hover:underline decoration-red-500/30 underline-offset-4"
+                    onClick={() => handleDelete(selectedTemplate.id)}
+                  >
+                    <Trash2 size={12} />
+                    Delete Strategy
+                  </button>
+                </div>
               </div>
             </motion.div>
           </>
