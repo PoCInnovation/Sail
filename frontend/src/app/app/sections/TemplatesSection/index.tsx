@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
 import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
 import { ExecutionSteps } from "./components/ExecutionSteps";
-import { ExecutionConsole } from "./components/ExecutionConsole";
 import { Transaction } from "@mysten/sui/transactions";
 import { Play, Edit, Trash2, Upload, Copy, Layers, Calendar, User, X, GripVertical, Loader2 } from "lucide-react";
 import type { Strategy } from "@/hooks/useWorkflows";
@@ -194,12 +193,12 @@ export function TemplatesSection() {
               setTxDigest(result.digest);
 
               // Use ref to get the latest executionSteps (avoid closure issues)
-              const currentSteps = executionStepsRef.current;
+              let currentSteps = executionStepsRef.current;
               
-              console.log('📝 Preparing to save history entry...');
-              console.log('   Strategy:', selectedTemplate.meta.name);
-              console.log('   Current executionSteps:', currentSteps);
-              console.log('   Steps count:', currentSteps.length);
+              // Fallback: if ref is empty, try to re-extract from template
+              if (!currentSteps || currentSteps.length === 0) {
+                currentSteps = extractStepsFromStrategy(selectedTemplate);
+              }
 
               // Add logs immediately to state
               const finalLogs: Log[] = [
@@ -208,8 +207,6 @@ export function TemplatesSection() {
                 { timestamp: Date.now(), message: `Digest: ${result.digest}`, type: 'success' as const },
                 { timestamp: Date.now(), message: "Execution completed successfully.", type: 'success' as const },
               ];
-
-              console.log('   Final Logs count:', finalLogs.length);
 
               const historyEntry: ExecutionHistoryEntry = {
                 id: `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -236,17 +233,12 @@ export function TemplatesSection() {
                 },
               };
 
-              console.log('   History entry to save:', historyEntry);
-              console.log('   History entry executionSteps:', historyEntry.executionSteps?.length || 0);
-
               const existingHistory = localStorage.getItem('execution_history');
               let history: ExecutionHistoryEntry[] = [];
 
               try {
                 history = existingHistory ? JSON.parse(existingHistory) : [];
-                console.log('   Existing history count:', history.length);
               } catch (e) {
-                console.error('   Failed to parse existing history:', e);
                 history = [];
               }
 
@@ -259,12 +251,12 @@ export function TemplatesSection() {
 
               try {
                 localStorage.setItem('execution_history', JSON.stringify(history));
-                console.log('✅ Successfully saved to localStorage');
-                console.log('   Total entries in history:', history.length);
-                console.log('   First entry executionSteps count:', history[0]?.executionSteps?.length || 0);
-                console.log('   First entry executionSteps:', history[0]?.executionSteps);
+                
+                // Notify user
+                setNotification({ type: 'success', message: 'Execution recorded in history' });
               } catch (error) {
                 console.error('❌ Failed to save to localStorage:', error);
+                setNotification({ type: 'error', message: 'Failed to save execution history' });
               }
 
               // Update logs state
@@ -278,13 +270,65 @@ export function TemplatesSection() {
 
               // Dispatch custom event to notify other components
               window.dispatchEvent(new CustomEvent('execution_history_updated', { detail: historyEntry }));
-              console.log('🔔 Dispatched execution_history_updated event');
             }, 500);
           },
           onError: (error) => {
             console.error("Execution failed:", error);
             setExecutionStatus('error');
             addLog(`Execution failed: ${error.message}`, 'error');
+
+            // Save failed execution to history
+            let currentSteps = executionStepsRef.current;
+            
+            // Fallback: if ref is empty, try to re-extract from template
+            if (!currentSteps || currentSteps.length === 0) {
+              currentSteps = extractStepsFromStrategy(selectedTemplate);
+            }
+
+            const finalLogs: Log[] = [
+              ...executionLogs,
+              { timestamp: Date.now(), message: `Execution failed: ${error.message}`, type: 'error' as const },
+            ];
+
+            const historyEntry: ExecutionHistoryEntry = {
+              id: `exec_fail_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              timestamp: Date.now(),
+              date: new Date().toISOString(),
+              strategyId: selectedTemplate.id,
+              strategyName: selectedTemplate.meta.name,
+              strategyDescription: selectedTemplate.meta.description,
+              status: 'error' as const,
+              network: 'mainnet',
+              sender: currentAccount.address,
+              logs: finalLogs,
+              executionSteps: currentSteps.map(step => ({
+                ...step,
+                status: 'error' as const, // Mark all steps as error/cancelled for now
+                error: { message: error.message }
+              })),
+              stats: {
+                totalSteps: currentSteps.length,
+                successfulSteps: 0,
+                failedSteps: currentSteps.length,
+                totalDuration: Date.now() - (executionLogs[0]?.timestamp || Date.now()),
+              },
+            };
+
+            try {
+              const existingHistory = localStorage.getItem('execution_history');
+              const history = existingHistory ? JSON.parse(existingHistory) : [];
+              history.unshift(historyEntry);
+              
+              if (history.length > 100) history.splice(100);
+              
+              localStorage.setItem('execution_history', JSON.stringify(history));
+              setNotification({ type: 'error', message: 'Failed execution recorded in history' });
+              
+              // Dispatch event
+              window.dispatchEvent(new CustomEvent('execution_history_updated', { detail: historyEntry }));
+            } catch (e) {
+              console.error('❌ Failed to save error history:', e);
+            }
           },
         }
       );
