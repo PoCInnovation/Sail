@@ -110,10 +110,13 @@ export function WalletModal({ isOpen }: WalletModalProps) {
                   </div>
 
                   {/* Connect Button */}
-                  <div className="pt-4">
+                  <div className="pt-4 space-y-3">
                     <div className="font-pixel text-base flex justify-center">
                       <ConnectButton />
                     </div>
+                    <p className="text-center text-xs text-yellow-500/80 font-mono">
+                      ⚠ Social Logins (Google, etc.) available on Testnet only
+                    </p>
                   </div>
 
                   {/* Bottom Info */}
