@@ -21,7 +21,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <SuiClientProvider networks={networkConfig} defaultNetwork="mainnet">
+      <SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
+        <RegisterEnokiWallets />
         <WalletProvider>
             <WalletPersistenceManager>
               {children}
