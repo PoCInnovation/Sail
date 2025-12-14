@@ -15,6 +15,8 @@ export type NodeType =
   | "DEX_SWAP"
   | "COIN_SPLIT"
   | "COIN_MERGE"
+  | "PERP_OPEN"
+  | "PERP_CLOSE"
   | "CUSTOM";
 
 export type Protocol =
@@ -25,6 +27,10 @@ export type Protocol =
   | "CETUS"
   | "TURBOS"
   | "AFTERMATH_ROUTER"
+  | "AFTERMATH_PERP"
+  | "HYPERSUI"
+  | "ASTROS"
+  | "PERPSEA"
   | "NATIVE"   // For built-in Sui operations (split, merge)
   | "CUSTOM";  // For user-defined custom Move calls
 
@@ -91,7 +97,7 @@ export interface BaseNode {
 
 export interface FlashBorrowNode extends BaseNode {
   type: "FLASH_BORROW";
-  protocol: "NAVI" | "DEEPBOOK_V3" | "BUCKET" | "SCALLOP";
+  protocol: "NAVI" | "DEEPBOOK_V3" | "BUCKET" | "SCALLOP" | "TURBOS";
   params: FlashBorrowParams;
   outputs: [NodeOutput, NodeOutput]; // [coin, receipt]
 }
@@ -99,8 +105,11 @@ export interface FlashBorrowNode extends BaseNode {
 export interface FlashBorrowParams {
   asset: string;                 // Coin type: "0x2::sui::SUI"
   amount: string;                // Amount as string (u64)
-  pool_id?: string;              // Required for DeepBook, optional for others
+  pool_id?: string;              // Required for DeepBook and Turbos, optional for others
   asset_type?: AssetType;        // Required for DeepBook (BASE or QUOTE)
+  coin_type_a?: string;          // Required for Turbos: first coin type in pool
+  coin_type_b?: string;          // Required for Turbos: second coin type in pool
+  recipient?: string;            // Optional recipient address (defaults to sender)
 }
 
 // ----------------------------------------------------------------------------
@@ -109,15 +118,17 @@ export interface FlashBorrowParams {
 
 export interface FlashRepayNode extends BaseNode {
   type: "FLASH_REPAY";
-  protocol: "NAVI" | "DEEPBOOK_V3" | "BUCKET" | "SCALLOP";
+  protocol: "NAVI" | "DEEPBOOK_V3" | "BUCKET" | "SCALLOP" | "TURBOS";
   params: FlashRepayParams;
   inputs: FlashRepayInputs;
 }
 
 export interface FlashRepayParams {
   asset: string;                 // Must match borrow asset
-  pool_id?: string;              // Required for DeepBook
+  pool_id?: string;              // Required for DeepBook and Turbos
   asset_type?: AssetType;        // Required for DeepBook
+  coin_type_a?: string;          // Required for Turbos: first coin type in pool
+  coin_type_b?: string;          // Required for Turbos: second coin type in pool
 }
 
 export interface FlashRepayInputs {
@@ -164,6 +175,7 @@ export interface TurbosSwapParams {
   coin_type_a: string;
   coin_type_b: string;
   direction: Extract<SwapDirection, "A_TO_B" | "B_TO_A">;
+  amount_mode: AmountMode;       // EXACT_IN or EXACT_OUT
   amount: string;
   slippage_tolerance: string;
 }
@@ -215,6 +227,54 @@ export interface CoinMergeInputs {
 }
 
 // ----------------------------------------------------------------------------
+// PERP_OPEN Node (Open Perpetual Position)
+// ----------------------------------------------------------------------------
+
+export interface PerpOpenNode extends BaseNode {
+  type: "PERP_OPEN";
+  protocol: "AFTERMATH_PERP" | "HYPERSUI" | "ASTROS" | "PERPSEA";
+  params: PerpOpenParams;
+  inputs: PerpOpenInputs;
+  outputs: [NodeOutput];         // [position_id or receipt]
+}
+
+export interface PerpOpenParams {
+  market_id: string;             // Market identifier (e.g., "SUI/USDC")
+  direction: "LONG" | "SHORT";   // Position direction
+  size: string;                  // Position size (in base asset units)
+  leverage?: string;             // Leverage multiplier (e.g., "10" for 10x)
+  collateral: string;            // Collateral amount
+  collateral_type: string;       // Collateral coin type
+  slippage_tolerance?: string;  // Slippage tolerance (e.g., "0.01" for 1%)
+}
+
+export interface PerpOpenInputs {
+  collateral: string;            // Reference: "node_id.output_id"
+}
+
+// ----------------------------------------------------------------------------
+// PERP_CLOSE Node (Close Perpetual Position)
+// ----------------------------------------------------------------------------
+
+export interface PerpCloseNode extends BaseNode {
+  type: "PERP_CLOSE";
+  protocol: "AFTERMATH_PERP" | "HYPERSUI" | "ASTROS" | "PERPSEA";
+  params: PerpCloseParams;
+  inputs: PerpCloseInputs;
+  outputs: [NodeOutput];         // [collateral_returned]
+}
+
+export interface PerpCloseParams {
+  market_id: string;             // Market identifier (must match open)
+  position_id?: string;          // Position ID (if protocol uses position objects)
+  size?: string;                 // Partial close size (optional, if not provided closes full position)
+}
+
+export interface PerpCloseInputs {
+  position: string;               // Reference: "node_id.output_id" (position from PERP_OPEN)
+}
+
+// ----------------------------------------------------------------------------
 // CUSTOM Node (User-Defined Move Calls)
 // ----------------------------------------------------------------------------
 
@@ -252,6 +312,8 @@ export type Node =
   | DexSwapNode
   | CoinSplitNode
   | CoinMergeNode
+  | PerpOpenNode
+  | PerpCloseNode
   | CustomNode;
 
 // ============================================================================

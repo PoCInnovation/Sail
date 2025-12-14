@@ -28,8 +28,10 @@ import { GraphValidator } from "../validation/graph-validator";
 import { TopologicalSort } from "../utils/topological-sort";
 import { FlashLoanAdapter } from "../adapters/flashloan/types";
 import { NaviAdapter } from "../adapters/flashloan/navi-adapter";
+import { TurbosFlashLoanAdapter } from "../adapters/flashloan/turbos-adapter";
 import { DexAdapter } from "../adapters/dex/types";
 import { CetusAdapter } from "../adapters/dex/cetus-adapter";
+import { TurbosAdapter } from "../adapters/dex/turbos-adapter";
 
 /**
  * Result cache entry
@@ -52,27 +54,32 @@ export class TransactionBuilder {
   private flashLoanAdapters: Map<string, FlashLoanAdapter>;
   private dexAdapters: Map<string, DexAdapter>;
 
-  constructor() {
+  private network: "mainnet" | "testnet" | "devnet";
+
+  constructor(network: "mainnet" | "testnet" | "devnet" = "mainnet") {
     this.tx = new Transaction();
     this.resultCache = new Map();
     this.swapEstimateCache = new Map();
+    this.network = network;
 
-    // Initialize adapters (Mainnet only)
-    this.flashLoanAdapters = new Map([
-      ["NAVI", new NaviAdapter()],
-      // Add more flash loan adapters here
-      // ["DEEPBOOK_V3", new DeepBookV3Adapter()],
-      // ["SCALLOP", new ScallopAdapter()],
-      // ["BUCKET", new BucketAdapter()],
-    ]);
+    // Initialize adapters with network configuration
+    this.flashLoanAdapters = new Map<string, FlashLoanAdapter>();
+    this.flashLoanAdapters.set("NAVI", new NaviAdapter());
+    if (network === "testnet") {
+      // Turbos is only available on testnet
+      this.flashLoanAdapters.set("TURBOS", new TurbosFlashLoanAdapter(network));
+    }
+    // Add more flash loan adapters here
+    // this.flashLoanAdapters.set("DEEPBOOK_V3", new DeepBookV3Adapter());
+    // this.flashLoanAdapters.set("SCALLOP", new ScallopAdapter());
+    // this.flashLoanAdapters.set("BUCKET", new BucketAdapter());
 
-    this.dexAdapters = new Map([
-      ["CETUS", new CetusAdapter()],
-      // Add more DEX adapters here
-      // ["DEEPBOOK_V3", new DeepBookV3DexAdapter()],
-      // ["TURBOS", new TurbosAdapter()],
-      // ["AFTERMATH_ROUTER", new AftermathAdapter()],
-    ]);
+    this.dexAdapters = new Map<string, DexAdapter>();
+    this.dexAdapters.set("CETUS", new CetusAdapter(network));
+    this.dexAdapters.set("TURBOS", new TurbosAdapter(network));
+    // Add more DEX adapters here
+    // this.dexAdapters.set("DEEPBOOK_V3", new DeepBookV3DexAdapter());
+    // this.dexAdapters.set("AFTERMATH_ROUTER", new AftermathAdapter());
   }
 
   /**
@@ -174,13 +181,88 @@ export class TransactionBuilder {
   // ==========================================================================
 
   /**
+   * Protocol Router: Automatically redirect protocols based on network
+   * - On testnet: NAVI → TURBOS (Navi not available on testnet)
+   * - On mainnet: Keep original protocol
+   * 
+   * Also adapts node parameters when routing (e.g., Navi params → Turbos params)
+   */
+  private getFlashLoanAdapter(protocol: string, node?: FlashBorrowNode | FlashRepayNode): FlashLoanAdapter {
+    let targetProtocol = protocol;
+    let needsParamAdaptation = false;
+    
+    // Auto-redirect: Navi → Turbos on testnet
+    if (this.network === "testnet" && protocol === "NAVI") {
+      targetProtocol = "TURBOS";
+      needsParamAdaptation = true;
+      console.log(`🔄 Auto-routing: NAVI → TURBOS on testnet (Navi not available on testnet)`);
+      
+      // Validate that required Turbos params are present
+      if (node && node.type === "FLASH_BORROW") {
+        const params = (node as FlashBorrowNode).params;
+        if (!params.pool_id || !params.coin_type_a || !params.coin_type_b) {
+          throw new Error(
+            `❌ CONFIGURATION ERROR: Your strategy uses protocol "NAVI" which is not available on testnet.\n\n` +
+            `The system automatically routes to "TURBOS" on testnet, but Turbos requires additional parameters:\n` +
+            `  - pool_id: The Turbos pool ID for the token pair\n` +
+            `  - coin_type_a: First coin type in the pool (e.g., "0x2::sui::SUI")\n` +
+            `  - coin_type_b: Second coin type in the pool\n\n` +
+            `💡 Solution: Update your strategy to include these parameters:\n` +
+            `  {\n` +
+            `    "protocol": "TURBOS",\n` +
+            `    "params": {\n` +
+            `      "asset": "0x2::sui::SUI",\n` +
+            `      "amount": "1000000000",\n` +
+            `      "pool_id": "0x...",  // ← Add this\n` +
+            `      "coin_type_a": "0x2::sui::SUI",  // ← Add this\n` +
+            `      "coin_type_b": "0x...::usdc::USDC"  // ← Add this\n` +
+            `    }\n` +
+            `  }\n\n` +
+            `📚 Find Turbos pools on testnet: https://suiscan.xyz/testnet\n` +
+            `This is NOT a balance issue - your wallet balance is sufficient.`
+          );
+        }
+      }
+    }
+    
+    const adapter = this.flashLoanAdapters.get(targetProtocol);
+    if (!adapter) {
+      if (this.network === "testnet" && protocol === "NAVI") {
+        throw new Error(
+          `Protocol "NAVI" is not available on testnet. ` +
+          `Turbos Finance (TURBOS) is available on testnet for flash loans and swaps. ` +
+          `Please update your strategy to use protocol "TURBOS" instead of "NAVI" when on testnet.`
+        );
+      }
+      throw new Error(`No adapter found for flash loan protocol: ${protocol} on ${this.network}`);
+    }
+    
+    return adapter;
+  }
+
+  /**
+   * Protocol Router for DEX: Automatically redirect protocols based on network
+   * - On testnet: Can redirect if needed (currently Cetus and Turbos both available)
+   */
+  private getDexAdapter(protocol: string): DexAdapter {
+    let targetProtocol = protocol;
+    
+    // Auto-redirect logic for DEX if needed in the future
+    // For now, both Cetus and Turbos are available on testnet
+    
+    const adapter = this.dexAdapters.get(targetProtocol);
+    if (!adapter) {
+      throw new Error(`No adapter found for DEX protocol: ${protocol} on ${this.network}`);
+    }
+    
+    return adapter;
+  }
+
+  /**
    * Add flash borrow node
    */
   private addFlashBorrow(node: FlashBorrowNode): void {
-    const adapter = this.flashLoanAdapters.get(node.protocol);
-    if (!adapter) {
-      throw new Error(`No adapter found for flash loan protocol: ${node.protocol}`);
-    }
+    const adapter = this.getFlashLoanAdapter(node.protocol, node);
 
     const { coin, receipt } = adapter.borrow(this.tx, node);
 
@@ -200,20 +282,20 @@ export class TransactionBuilder {
    * Add flash repay node
    */
   private addFlashRepay(node: FlashRepayNode, strategy: Strategy): void {
-    const adapter = this.flashLoanAdapters.get(node.protocol);
-    if (!adapter) {
-      throw new Error(`No adapter found for flash loan protocol: ${node.protocol}`);
-    }
-
-    // Resolve inputs
-    const coin = this.resolveReference(node.inputs.coin_repay);
-    const receipt = this.resolveReference(node.inputs.receipt);
-
-    // Find the corresponding borrow node to get the amount
+    // Find the corresponding borrow node to get the amount and determine the actual protocol used
     // The receipt input is in format "nodeId.outputId"
     const receiptRef = node.inputs.receipt;
     const [borrowNodeId] = receiptRef.split(".");
     const borrowNode = strategy.nodes.find((n) => n.id === borrowNodeId) as FlashBorrowNode;
+
+    // Use the same protocol routing as the borrow node
+    // If borrow was NAVI on testnet, it was routed to TURBOS, so repay should also use TURBOS
+    const actualProtocol = borrowNode ? borrowNode.protocol : node.protocol;
+    const adapter = this.getFlashLoanAdapter(actualProtocol, node);
+
+    // Resolve inputs
+    const coin = this.resolveReference(node.inputs.coin_repay);
+    const receipt = this.resolveReference(node.inputs.receipt);
 
     let borrowedAmount: bigint | undefined;
     if (borrowNode && borrowNode.type === "FLASH_BORROW") {
@@ -227,10 +309,7 @@ export class TransactionBuilder {
    * Add DEX swap node
    */
   private addDexSwap(node: DexSwapNode): void {
-    const adapter = this.dexAdapters.get(node.protocol);
-    if (!adapter) {
-      throw new Error(`No adapter found for DEX protocol: ${node.protocol}`);
-    }
+    const adapter = this.getDexAdapter(node.protocol);
 
     // Resolve input coin
     const coinIn = this.resolveReference(node.inputs.coin_in);

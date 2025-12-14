@@ -21,7 +21,7 @@ export class Simulator {
   private client: SuiClient;
 
   constructor(private readonly network: "mainnet" | "testnet" = "mainnet") {
-    this.builder = new TransactionBuilder();
+    this.builder = new TransactionBuilder(this.network);
     this.client = new SuiClient({ url: this.getFullNodeUrl() });
   }
 
@@ -36,6 +36,11 @@ export class Simulator {
     // Reset builder state
     this.builder.reset();
 
+    // Log simulation start with network info
+    console.log(`[SIMULATOR] Starting simulation on ${this.network}`);
+    console.log(`[SIMULATOR] Sender: ${sender}`);
+    console.log(`[SIMULATOR] Strategy ID: ${strategy.id}`);
+
     const result: SimulationResult = {
       success: false,
       estimated_gas: 0,
@@ -48,8 +53,10 @@ export class Simulator {
     try {
       // 1. Build the transaction
       // This also performs validation and pre-simulation (swap estimates)
+      console.log(`[SIMULATOR] Building transaction with network: ${this.network}`);
       const tx = await this.builder.buildFromStrategy(strategy);
       tx.setSender(sender);
+      console.log(`[SIMULATOR] Transaction built successfully`);
 
       // Capture swap estimates from builder if available
       // Note: TransactionBuilder doesn't expose cache publicly yet.
@@ -111,19 +118,39 @@ export class Simulator {
         // Transaction failed
         result.success = false;
         const errorMsg = dryRunResult.effects.status.error || "Unknown error";
-        console.error("Dry run failed with error:", errorMsg);
-        // For debugging, return raw error
+        
+        // Log full error details for debugging
+        console.error("=== DRY RUN FAILED ===");
+        console.error("Network:", this.network);
+        console.error("Error from effects:", errorMsg);
+        console.error("Full effects:", JSON.stringify(dryRunResult.effects, null, 2));
+        console.error("=====================");
+        
+        // Parse error message with improved error detection
+        const userMessage = this.parseExecutionError(errorMsg);
+        
         result.errors.push({
           rule_id: "dry_run_failed",
           severity: "ERROR",
-          message: errorMsg,
+          message: userMessage,
         });
       }
 
     } catch (error: any) {
       result.success = false;
-      console.error("Simulation error details:", error);
-      const userMessage = this.parseExecutionError(error.message || "An unexpected error occurred during simulation");
+      
+      // Log full error details for debugging
+      console.error("=== SIMULATION ERROR DETAILS ===");
+      console.error("Network:", this.network);
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
+      console.error("Full error object:", JSON.stringify(error, null, 2));
+      console.error("================================");
+      
+      // Parse error message - prioritize package/object errors over balance errors
+      const errorMessage = error.message || error.toString() || "An unexpected error occurred during simulation";
+      const userMessage = this.parseExecutionError(errorMessage);
+      
       result.errors.push({
         rule_id: "simulation_error",
         severity: "ERROR",
@@ -136,8 +163,83 @@ export class Simulator {
 
   /**
    * Parse Move execution errors and return user-friendly messages
+   * Distinguishes clearly between:
+   * 1. Package/Object does not exist (configuration issue)
+   * 2. Insufficient balance (funding issue)
    */
   private parseExecutionError(errorMsg: string): string {
+    // ===================================================================
+    // PRIORITY 1: Package/Object does not exist (CONFIGURATION ERROR)
+    // ===================================================================
+    
+    // Handle "Package object does not exist" - This is a CONFIGURATION issue, not a balance issue
+    if (errorMsg.includes("Package object does not exist") || errorMsg.includes("does not exist with ID")) {
+      // Extract package ID if present
+      const packageIdMatch = errorMsg.match(/0x[a-fA-F0-9]{64}/);
+      const packageId = packageIdMatch ? packageIdMatch[0] : null;
+      
+      let message = `❌ CONFIGURATION ERROR: Package does not exist on ${this.network}.\n\n`;
+      
+      if (packageId) {
+        message += `Package ID: ${packageId}\n\n`;
+        
+        // Check if it's a known package and suggest the issue
+        if (packageId === "0x8200ce83e1bc0894b641f0a466694b4f6e25d3f9cc3093915a887ec9e7f3395e") {
+          message += `⚠️ This is the old Navi Protocol package ID.\n`;
+          message += `The package may not exist on ${this.network}, or you need to use the updated package ID.\n\n`;
+          message += `Action: Check the correct package ID for ${this.network} on SuiScan:\n`;
+          message += `https://suiscan.xyz/${this.network}\n`;
+        } else if (packageId === "0xee0041239b89564ce870a7dec5ddc5d114367ab94a1137e90aa0633cb76518e0") {
+          if (this.network === "testnet") {
+            message += `⚠️ This is the Navi Protocol mainnet package ID (upgrade Nov 2025).\n`;
+            message += `Navi Protocol is not available on testnet.\n\n`;
+            message += `💡 On testnet, use Turbos Finance for flash loans and swaps:\n`;
+            message += `   - Flash Loans: Use protocol "TURBOS" with Turbos flash_swap\n`;
+            message += `   - DEX Swaps: Use protocol "TURBOS" with Turbos pools\n`;
+            message += `   - Turbos Package: 0x3526c88f5304c78fb93ed1cc1961d56b8517108550c9938b8a5a0e6c90fbe2a5\n\n`;
+            message += `Action: Switch your strategy to use "TURBOS" protocol on testnet, or switch to mainnet for Navi.\n`;
+          } else {
+            message += `⚠️ This is the Navi Protocol mainnet package ID (upgrade Nov 2025).\n`;
+            message += `Action: Verify this package exists on ${this.network}:\n`;
+            message += `https://suiscan.xyz/${this.network}/package/${packageId}\n`;
+          }
+        } else {
+          message += `Action: Verify this package exists on ${this.network}:\n`;
+          message += `https://suiscan.xyz/${this.network}/package/${packageId}\n`;
+        }
+      } else {
+        message += `Action: Check your strategy configuration and verify all package IDs are correct for ${this.network}.\n`;
+      }
+      
+      message += `\nThis is NOT a balance issue - your wallet balance is sufficient.`;
+      return message;
+    }
+    
+    // Handle "Object does not exist" - Similar configuration issue
+    if (errorMsg.includes("Object does not exist") || errorMsg.includes("Object ID") && errorMsg.includes("does not exist")) {
+      const objectIdMatch = errorMsg.match(/0x[a-fA-F0-9]{64}/);
+      const objectId = objectIdMatch ? objectIdMatch[0] : null;
+      
+      let message = `❌ CONFIGURATION ERROR: Object does not exist on ${this.network}.\n\n`;
+      
+      if (objectId) {
+        message += `Object ID: ${objectId}\n\n`;
+        message += `This could be:\n`;
+        message += `- STORAGE, FLASHLOAN_CONFIG, or other protocol objects\n`;
+        message += `- A pool ID that doesn't exist\n`;
+        message += `- An incorrect object ID in your configuration\n\n`;
+        message += `Action: Verify the object exists on ${this.network}:\n`;
+        message += `https://suiscan.xyz/${this.network}/object/${objectId}\n`;
+      }
+      
+      message += `\nThis is NOT a balance issue - your wallet balance is sufficient.`;
+      return message;
+    }
+    
+    // ===================================================================
+    // PRIORITY 2: Insufficient Balance (FUNDING ERROR)
+    // ===================================================================
+    
     // Handle "could not automatically determine a budget" errors with MoveAbort
     if (errorMsg.includes("could not automatically determine a budget") && errorMsg.includes("MoveAbort")) {
       // Extract abort code
@@ -145,7 +247,10 @@ export class Simulator {
       const abortCode = abortCodeMatch ? parseInt(abortCodeMatch[1]) : null;
 
       if (abortCode === 1503) {
-        return "Insufficient balance: You don't have enough SUI on mainnet to cover the transaction. Make sure you have sufficient balance to cover the borrowed amount + gas fees.";
+        return `💰 INSUFFICIENT BALANCE: You don't have enough SUI on ${this.network}.\n\n` +
+               `Required: Borrowed amount + flash loan fees (0.06%) + gas fees\n\n` +
+               `Action: Add more SUI to your wallet on ${this.network}.\n` +
+               `This is a FUNDING issue, not a configuration issue.`;
       }
       if (abortCode === 1502) {
         return "Flash loan repayment error: The repayment amount is incorrect. The borrowed amount plus fees must be repaid exactly.";
@@ -154,7 +259,10 @@ export class Simulator {
         return "Assertion failed in flash loan contract. Check your strategy logic.";
       }
 
-      return `Budget error: The protocol cannot determine the required budget (error code: ${abortCode || "unknown"}). You probably don't have enough SUI on mainnet.`;
+      return `💰 INSUFFICIENT BALANCE: The protocol cannot determine the required budget (error code: ${abortCode || "unknown"}).\n\n` +
+             `This usually means you don't have enough SUI on ${this.network}.\n\n` +
+             `Action: Add more SUI to your wallet.\n` +
+             `This is a FUNDING issue, not a configuration issue.`;
     }
 
     // Handle Move abort errors (e.g., "MoveAbort(MoveLocation { ... }, 1503)")
@@ -165,7 +273,10 @@ export class Simulator {
 
       // Map common abort codes to user-friendly messages
       if (abortCode === 1503) {
-        return "Insufficient balance: You don't have enough SUI on mainnet to cover the transaction. Make sure you have sufficient balance to cover the borrowed amount + gas fees.";
+        return `💰 INSUFFICIENT BALANCE: You don't have enough SUI on ${this.network}.\n\n` +
+               `Required: Borrowed amount + flash loan fees (0.06%) + gas fees\n\n` +
+               `Action: Add more SUI to your wallet on ${this.network}.\n` +
+               `This is a FUNDING issue, not a configuration issue.`;
       }
       if (abortCode === 1502) {
         return "Flash loan repayment error: The repayment amount is incorrect. The borrowed amount plus fees must be repaid exactly.";
@@ -178,7 +289,12 @@ export class Simulator {
       }
 
       // Generic message for other abort codes
-      return `Execution error (Error code: ${abortCode || "unknown"}). You may not have enough funds or there may be an issue with your strategy logic on mainnet.`;
+      return `⚠️ EXECUTION ERROR (Error code: ${abortCode || "unknown"}).\n\n` +
+             `Possible causes:\n` +
+             `- Insufficient balance (add more SUI)\n` +
+             `- Strategy logic issue\n` +
+             `- Configuration issue (wrong package/object IDs)\n\n` +
+             `Check your wallet balance and strategy configuration on ${this.network}.`;
     }
 
     // Handle unused value errors (bytecode verification)
@@ -186,25 +302,62 @@ export class Simulator {
        return "Unused value error: A coin or object was created but not used. In Sui, you cannot simply drop coins with value. You must merge them, transfer them, or destroy them (if zero).";
     }
 
-    // Handle other error patterns
+    // Handle other error patterns related to balance
     if (errorMsg.includes("could not automatically determine a budget")) {
-      return "Unable to determine gas budget: You may not have enough SUI on mainnet for gas fees. Make sure you have sufficient balance.";
+      return `💰 INSUFFICIENT BALANCE: Unable to determine gas budget.\n\n` +
+             `You may not have enough SUI on ${this.network} for gas fees.\n\n` +
+             `Action: Add more SUI to your wallet.\n` +
+             `This is a FUNDING issue, not a configuration issue.`;
     }
 
-    if (errorMsg.includes("balance")) {
-      return "Insufficient balance on mainnet: You don't have enough SUI to execute this strategy. Please add more funds to your wallet.";
+    if (errorMsg.includes("balance") && (errorMsg.includes("insufficient") || errorMsg.includes("not enough"))) {
+      return `💰 INSUFFICIENT BALANCE on ${this.network}.\n\n` +
+             `You don't have enough SUI to execute this strategy.\n\n` +
+             `Action: Add more SUI to your wallet.\n` +
+             `This is a FUNDING issue, not a configuration issue.`;
     }
 
-    if (errorMsg.includes("gas")) {
-      return "Insufficient gas on mainnet: You don't have enough SUI to pay for gas fees. Please add more funds to your wallet.";
+    if (errorMsg.includes("gas") && (errorMsg.includes("insufficient") || errorMsg.includes("not enough"))) {
+      return `💰 INSUFFICIENT GAS on ${this.network}.\n\n` +
+             `You don't have enough SUI to pay for gas fees.\n\n` +
+             `Action: Add more SUI to your wallet.\n` +
+             `This is a FUNDING issue, not a configuration issue.`;
     }
 
-    if (errorMsg.includes("coin")) {
-      return "Coin error on mainnet: There may be an issue with the coins in your strategy. Check that all coin types are correct.";
+    if (errorMsg.includes("coin") && !errorMsg.includes("does not exist")) {
+      return `⚠️ COIN ERROR on ${this.network}.\n\n` +
+             `There may be an issue with the coins in your strategy.\n\n` +
+             `Action: Check that all coin types are correct.\n` +
+             `This could be a CONFIGURATION issue (wrong coin types) or a FUNDING issue (insufficient coins).`;
     }
 
-    // Return original error with a generic note
-    return `Execution error on mainnet: ${errorMsg}. Make sure you have sufficient SUI balance and check your strategy.`;
+    // ===================================================================
+    // GENERIC ERROR - Try to determine if it's configuration or funding
+    // ===================================================================
+    
+    // Check for common configuration error patterns
+    if (errorMsg.includes("does not exist") || 
+        errorMsg.includes("not found") || 
+        errorMsg.includes("invalid") && (errorMsg.includes("package") || errorMsg.includes("object"))) {
+      return `❌ CONFIGURATION ERROR on ${this.network}.\n\n` +
+             `Error: ${errorMsg}\n\n` +
+             `This is likely a configuration issue:\n` +
+             `- Wrong package ID for ${this.network}\n` +
+             `- Wrong object ID (STORAGE, FLASHLOAN_CONFIG, etc.)\n` +
+             `- Package/object doesn't exist on ${this.network}\n\n` +
+             `Action: Verify all package and object IDs are correct for ${this.network}.\n` +
+             `Check: https://suiscan.xyz/${this.network}\n\n` +
+             `This is NOT a balance issue.`;
+    }
+    
+    // Default: Return original error with clear categorization attempt
+    return `⚠️ EXECUTION ERROR on ${this.network}.\n\n` +
+           `Error: ${errorMsg}\n\n` +
+           `Possible causes:\n` +
+           `1. ❌ CONFIGURATION: Wrong package/object IDs for ${this.network}\n` +
+           `2. 💰 FUNDING: Insufficient SUI balance\n` +
+           `3. ⚠️ LOGIC: Strategy logic issue\n\n` +
+           `Check your configuration and wallet balance.`;
   }
 
   private getFullNodeUrl(): string {

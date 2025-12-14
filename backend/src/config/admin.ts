@@ -10,6 +10,20 @@ export const ADMIN_CONFIG = {
   CAP_ID: process.env.CAP_ID || '',
 };
 
+// Export individual values for convenience
+export const PACKAGE_ID = process.env.PACKAGE_ID || '';
+export const WHITELIST_ID = process.env.WHITELIST_ID || '';
+export const CAP_ID = process.env.CAP_ID || '';
+
+/**
+ * Get admin signer (keypair) from environment variable
+ * If not set, returns null (admin functions will be disabled)
+ * @deprecated Use getAdminKeypair instead
+ */
+export function getAdminSigner(): Ed25519Keypair | null {
+  return getAdminKeypair();
+}
+
 /**
  * Get admin keypair from environment variable
  * If not set, returns null (admin functions will be disabled)
