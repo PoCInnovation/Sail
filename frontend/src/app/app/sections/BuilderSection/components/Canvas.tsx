@@ -10,9 +10,10 @@ interface CanvasProps {
   tokenMap: Record<string, string>;
   onRemoveBlock: (id: string) => void;
   onUpdateBlockParam: (id: string, key: string, value: any) => void;
+  network?: string;
 }
 
-export function Canvas({ blocks, tokenMap, onRemoveBlock, onUpdateBlockParam }: CanvasProps) {
+export function Canvas({ blocks, tokenMap, onRemoveBlock, onUpdateBlockParam, network = "mainnet" }: CanvasProps) {
   return (
     <div className="flex-1 bg-black border-2 border-gray-800 p-6 overflow-y-auto relative">
       {/* Grid Pattern Background */}
@@ -81,6 +82,7 @@ export function Canvas({ blocks, tokenMap, onRemoveBlock, onUpdateBlockParam }: 
                     onRemove={onRemoveBlock}
                     onUpdateParam={onUpdateBlockParam}
                     isLast={index === blocks.length - 1}
+                    network={network}
                   />
                 );
               })}

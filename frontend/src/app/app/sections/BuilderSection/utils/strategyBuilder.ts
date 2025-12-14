@@ -21,7 +21,7 @@ export function normalizeAmount(amount: string): string {
   return Math.floor(amountInSui * 1_000_000_000).toString();
 }
 
-export function buildStrategyFromBlocks(blocks: Block[], tokenMap: Record<string, string>, authorAddress: string) {
+export function buildStrategyFromBlocks(blocks: Block[], tokenMap: Record<string, string>, authorAddress: string, network: "mainnet" | "testnet" | "devnet" = "mainnet") {
   const nodes: any[] = [];
   const edges: any[] = [];
   
@@ -55,11 +55,25 @@ export function buildStrategyFromBlocks(blocks: Block[], tokenMap: Record<string
       const asset = normalizeToken(block.params.asset, tokenMap);
       const amount = normalizeAmount(block.params.amount || "0");
 
+      // Auto-select protocol based on network: TURBOS on testnet, NAVI on mainnet
+      const protocol = network === "testnet" ? "TURBOS" : "NAVI";
+      
+      // Build params based on protocol
+      const params: any = { asset, amount };
+      
+      // Turbos requires additional params
+      if (protocol === "TURBOS") {
+        params.pool_id = block.params.pool_id || "";
+        params.coin_type_a = block.params.coin_type_a || asset;
+        params.coin_type_b = block.params.coin_type_b || "";
+        params.recipient = block.params.recipient;
+      }
+
       nodes.push({
         id: nodeId,
         type: "FLASH_BORROW",
-        protocol: "NAVI",
-        params: { asset, amount },
+        protocol,
+        params,
         outputs: [
           { id: "coin_borrowed", type: `Coin<${asset}>`, output_type: "COIN" },
           { id: "receipt", type: "FlashLoanReceipt", output_type: "RECEIPT" }
@@ -196,12 +210,38 @@ export function buildStrategyFromBlocks(blocks: Block[], tokenMap: Record<string
         coin_type: "0x2::sui::SUI"
       });
 
-      // 3. Repay Node
+      // 3. Repay Node - Use same protocol as borrow (TURBOS on testnet, NAVI on mainnet)
+      const repayProtocol = network === "testnet" ? "TURBOS" : "NAVI";
+      const repayParams: any = { asset };
+      
+      // Turbos requires additional params - get them from the borrow node
+      if (repayProtocol === "TURBOS") {
+        // Find the borrow node that created this receipt
+        const borrowNode = nodes.find(n => n.id === flashLoanReceiptNodeId);
+        if (borrowNode && borrowNode.type === "FLASH_BORROW") {
+          repayParams.pool_id = borrowNode.params.pool_id || "";
+          repayParams.coin_type_a = borrowNode.params.coin_type_a || asset;
+          repayParams.coin_type_b = borrowNode.params.coin_type_b || "";
+        } else {
+          // Fallback: try to find any FLASH_BORROW node
+          const anyBorrowNode = nodes.find(n => n.type === "FLASH_BORROW");
+          if (anyBorrowNode) {
+            repayParams.pool_id = anyBorrowNode.params.pool_id || "";
+            repayParams.coin_type_a = anyBorrowNode.params.coin_type_a || asset;
+            repayParams.coin_type_b = anyBorrowNode.params.coin_type_b || "";
+          } else {
+            repayParams.pool_id = "";
+            repayParams.coin_type_a = asset;
+            repayParams.coin_type_b = "";
+          }
+        }
+      }
+      
       nodes.push({
         id: nodeId,
         type: "FLASH_REPAY",
-        protocol: "NAVI",
-        params: { asset },
+        protocol: repayProtocol,
+        params: repayParams,
         inputs: {
           coin_repay: `${mergeNodeId}.merged_coin`,
           receipt: flashLoanReceiptNodeId ? `${flashLoanReceiptNodeId}.${flashLoanReceiptId}` : "receipt"

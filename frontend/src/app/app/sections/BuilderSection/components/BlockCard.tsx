@@ -15,6 +15,7 @@ interface BlockCardProps {
   onRemove: (id: string) => void;
   onUpdateParam: (id: string, key: string, value: any) => void;
   isLast: boolean;
+  network?: string;
 }
 
 const getBlockColor = (type: string) => {
@@ -39,7 +40,8 @@ export function BlockCard({
   tokenMap, 
   onRemove, 
   onUpdateParam,
-  isLast 
+  isLast,
+  network = "mainnet"
 }: BlockCardProps) {
   const colors = getBlockColor(block.type);
 
@@ -156,6 +158,48 @@ export function BlockCard({
                   placeholder="0.0"
                 />
               </div>
+              {/* Turbos-specific fields (only on testnet) */}
+              {network === "testnet" && (
+                <>
+                  <div className="col-span-2 space-y-2">
+                    <label className="font-mono text-[10px] text-gray-500 uppercase tracking-wider">
+                      ▸ Pool ID (Turbos) <span className="text-yellow-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={block.params.pool_id || ""}
+                      onChange={(e) => onUpdateParam(block.id, "pool_id", e.target.value)}
+                      className="w-full px-3 py-2 bg-black border border-gray-700 focus:border-gray-500 font-mono text-sm text-white outline-none transition-colors"
+                      placeholder="0x..."
+                    />
+                    <p className="text-[9px] text-gray-600">Required for Turbos on testnet</p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="font-mono text-[10px] text-gray-500 uppercase tracking-wider">
+                      ▸ Coin Type A <span className="text-yellow-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={block.params.coin_type_a || block.params.asset || ""}
+                      onChange={(e) => onUpdateParam(block.id, "coin_type_a", e.target.value)}
+                      className="w-full px-3 py-2 bg-black border border-gray-700 focus:border-gray-500 font-mono text-sm text-white outline-none transition-colors"
+                      placeholder="0x2::sui::SUI"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="font-mono text-[10px] text-gray-500 uppercase tracking-wider">
+                      ▸ Coin Type B <span className="text-yellow-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={block.params.coin_type_b || ""}
+                      onChange={(e) => onUpdateParam(block.id, "coin_type_b", e.target.value)}
+                      className="w-full px-3 py-2 bg-black border border-gray-700 focus:border-gray-500 font-mono text-sm text-white outline-none transition-colors"
+                      placeholder="0x...::usdc::USDC"
+                    />
+                  </div>
+                </>
+              )}
             </>
           )}
 

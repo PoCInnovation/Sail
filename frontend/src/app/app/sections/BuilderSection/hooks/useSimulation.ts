@@ -11,9 +11,10 @@ interface UseSimulationProps {
   onSuccess: (result: SimulationResult) => void;
   builderMode?: 'blocks' | 'json';
   rawJson?: string;
+  network?: string;
 }
 
-export function useSimulation({ blocks, tokenMap, senderAddress, onSuccess, builderMode = 'blocks', rawJson = '' }: UseSimulationProps) {
+export function useSimulation({ blocks, tokenMap, senderAddress, onSuccess, builderMode = 'blocks', rawJson = '', network = 'mainnet' }: UseSimulationProps) {
   const [isSimulating, setIsSimulating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,7 +43,7 @@ export function useSimulation({ blocks, tokenMap, senderAddress, onSuccess, buil
           throw new Error("Invalid JSON");
         }
       } else {
-        strategy = buildStrategyFromBlocks(blocks, tokenMap, senderAddress);
+        strategy = buildStrategyFromBlocks(blocks, tokenMap, senderAddress, network as "mainnet" | "testnet" | "devnet");
       }
       
       // Debug: log the generated strategy
