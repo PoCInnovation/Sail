@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useCurrentAccount, useSignPersonalMessage, useSignTransaction, useSuiClient } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
-import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
+import { SuiJsonRpcClient as SuiClient, getJsonRpcFullnodeUrl as getFullnodeUrl } from '@mysten/sui/jsonRpc';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -249,7 +249,7 @@ export function useWorkflowActions() {
 
       console.log('📡 Processing purchase on testnet...');
       // Create a testnet client specifically for marketplace purchases
-      const testnetClient = new SuiClient({ url: getFullnodeUrl('testnet') });
+      const testnetClient = new SuiClient({ url: getFullnodeUrl('testnet'), network: 'testnet' });
       const purchaseResult = await testnetClient.executeTransactionBlock({
         transactionBlock: signedTx.bytes,
         signature: signedTx.signature,
