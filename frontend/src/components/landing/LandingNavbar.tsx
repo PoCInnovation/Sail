@@ -168,7 +168,7 @@ function HamburgerMenu() {
                   key={link.name}
                   href={link.href}
                   onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-3 px-4 py-3 border border-cyan/10 hover:border-cyan/50 hover:bg-cyan/5 transition-all"
+                  className="flex items-center gap-3 px-4 py-3 border border-cyan/10 transition-all"
                 >
                   <span className="material-symbols-outlined text-cyan/70">
                     {link.icon}
@@ -255,8 +255,8 @@ export function LandingNavbar() {
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.6, ease: "easeOut" }}
       className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 ${scrolled
-          ? "bg-midnight/90 backdrop-blur-xl border-b border-cyan/20 shadow-[0_0_30px_rgba(0,240,255,0.1)]"
-          : "bg-transparent"
+        ? "bg-midnight/90 backdrop-blur-xl border-b border-cyan/20 shadow-[0_0_30px_rgba(0,240,255,0.1)]"
+        : "bg-transparent"
         }`}
     >
       {/* Top decorative line */}
