@@ -1,7 +1,7 @@
 "use client";
 
 import { Box, Grid } from "@mui/material";
-import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useCurrentAccount, useSuiClientContext } from "@mysten/dapp-kit";
 import { useTokens } from "./hooks/useTokens";
 import { useBlocks } from "./hooks/useBlocks";
 import { useSimulation } from "./hooks/useSimulation";
@@ -25,6 +25,7 @@ interface BuilderSectionProps {
 
 export function BuilderSection({ onNavigate }: BuilderSectionProps) {
   const currentAccount = useCurrentAccount();
+  const { network } = useSuiClientContext();
   const tokenMap = useTokens();
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const { uploadWorkflow } = useWorkflowActions();
@@ -57,6 +58,7 @@ export function BuilderSection({ onNavigate }: BuilderSectionProps) {
     onSuccess: setSimulationResult,
     builderMode,
     rawJson,
+    network: network || "mainnet",
   });
 
   const handleClear = () => {
@@ -84,7 +86,7 @@ export function BuilderSection({ onNavigate }: BuilderSectionProps) {
             throw new Error("Invalid JSON");
          }
       } else {
-        strategy = buildStrategyFromBlocks(blocks, tokenMap, currentAccount?.address || "Anonymous");
+        strategy = buildStrategyFromBlocks(blocks, tokenMap, currentAccount?.address || "Anonymous", network || "mainnet");
       }
       
       // Update metadata with user input
@@ -269,6 +271,7 @@ export function BuilderSection({ onNavigate }: BuilderSectionProps) {
                 tokenMap={tokenMap}
                 onRemoveBlock={removeBlock}
                 onUpdateBlockParam={updateBlockParam}
+                network={network || "mainnet"}
               />
             </>
           ) : (

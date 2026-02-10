@@ -5,8 +5,9 @@ import { Strategy } from '../../types/strategy';
 
 const router: Router = Router();
 
-// Initialize simulator with Mainnet
-const simulator = new Simulator('mainnet');
+// Initialize simulator with Mainnet (default)
+// Can be overridden per request via query param
+const defaultSimulator = new Simulator('mainnet');
 
 router.post('/simulate', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -19,6 +20,10 @@ router.post('/simulate', async (req: Request, res: Response): Promise<void> => {
       });
       return;
     }
+
+    // Get network from query param or env, default to mainnet
+    const network = (req.query.network as string) || process.env.SUI_NETWORK || 'mainnet';
+    const simulator = network === 'testnet' ? new Simulator('testnet') : defaultSimulator;
 
     // Run simulation
     const result = await simulator.simulate(strategy as Strategy, sender);

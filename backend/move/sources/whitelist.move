@@ -287,6 +287,34 @@ module startHack::whitelist {
         access_table.contains(user)
     }
 
+    /// Remove a template from the marketplace (admin only)
+    /// Note: the template_access table entry (if any) is left as-is because
+    /// Table<address, bool> does not have `drop` and cannot be destroyed
+    /// without knowing every key. This is harmless since the template is gone.
+    public entry fun remove_template(
+        wl: &mut Whitelist,
+        cap: &Cap,
+        template_id: ID,
+    ) {
+        assert!(cap.wl_id == object::id(wl), EInvalidCap);
+
+        // Find template by ID and remove it from the vector
+        let mut i = 0;
+        let len = wl.templates.length();
+        let mut found = false;
+
+        while (i < len) {
+            if (wl.templates[i].id == template_id) {
+                vector::swap_remove(&mut wl.templates, i);
+                found = true;
+                break
+            };
+            i = i + 1;
+        };
+
+        assert!(found, ENotInWhitelist);
+    }
+
     public fun remove(wl: &mut Whitelist, cap: &Cap, account: address) {
         assert!(cap.wl_id == object::id(wl), EInvalidCap);
         assert!(wl.addresses.contains(account), ENotInWhitelist);

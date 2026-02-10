@@ -8,14 +8,14 @@
 import { Transaction } from "@mysten/sui/transactions";
 import { FlashBorrowNode, FlashRepayNode } from "../../types/strategy";
 import { BaseFlashLoanAdapter, BorrowResult } from "./types";
-import { MAINNET_ADDRESSES } from "../../config/addresses";
+import { getAddresses } from "../../config/addresses";
 
 export class NaviAdapter extends BaseFlashLoanAdapter {
   readonly protocol = "NAVI";
   protected readonly feePercentage = 0.0006; // 0.06%
 
   private getConfig() {
-    return MAINNET_ADDRESSES;
+    return getAddresses();
   }
 
   borrow(tx: Transaction, node: FlashBorrowNode): BorrowResult {

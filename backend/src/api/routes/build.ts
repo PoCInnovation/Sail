@@ -20,21 +20,24 @@ router.post('/build', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Build the transaction
-    const builder = new TransactionBuilder();
+    // Get network from query param or env, default to mainnet
+    const network = (req.query.network as string) || process.env.SUI_NETWORK || 'mainnet';
+    
+    // Build the transaction with network
+    const builder = new TransactionBuilder(network as any);
     const tx = await builder.buildFromStrategy(strategy as Strategy);
 
     // Set the sender
     tx.setSender(sender);
 
     // Initialize client
-    const client = new SuiClient({ url: getFullnodeUrl('mainnet') });
+    const client = new SuiClient({ url: getFullnodeUrl(network as any) });
 
     // Get reference gas price
     const rgp = await client.getReferenceGasPrice();
-    console.log('Fetched RGP from Mainnet:', rgp);
+    console.log(`Fetched RGP from ${network}:`, rgp);
 
-    // Force gas price to be at least 1000 MIST (Mainnet minimum) to avoid 505 error
+    // Force gas price to be at least 1000 MIST (Testnet minimum) to avoid 505 error
     const gasPrice = rgp > 1000n ? rgp : 1000n;
     tx.setGasPrice(gasPrice);
     console.log('Setting transaction gas price to:', gasPrice);
