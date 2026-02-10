@@ -201,6 +201,32 @@
 
 /**
  * @swagger
+ * /api/workflows/delete:
+ *   post:
+ *     tags: [Workflows]
+ *     summary: Delete a workflow from the marketplace
+ *     description: Permanently deletes a workflow from the on-chain marketplace so it no longer appears in the list
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - workflowId
+ *             properties:
+ *               workflowId:
+ *                 type: string
+ *                 description: On-chain workflow (template) ID
+ *     responses:
+ *       200:
+ *         description: Workflow deleted successfully
+ *       404:
+ *         description: Workflow not found
+ */
+
+/**
+ * @swagger
  * /api/seal/encrypt:
  *   post:
  *     tags: [Seal]

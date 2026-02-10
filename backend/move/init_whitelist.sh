@@ -2,7 +2,7 @@
 
 # Script pour initialiser la whitelist après déploiement
 
-PACKAGE_ID="0xbe7b62c3fb88f7fdeb871c1382da41a27bb8e60b2fd1fcfbf9131099176ea571"
+PACKAGE_ID="0xff53bc852bf1281d2f477f47c8699f5af3ad7b8ffe5efabcc0922aef5ce2a758"
 BENEFICIARY="0x904f64f755764162a228a7da49b1288160597165ec60ebbf5fb9a94957db76c3"
 
 echo "🚀 Initializing whitelist..."

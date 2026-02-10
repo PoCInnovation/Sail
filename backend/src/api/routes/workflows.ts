@@ -84,19 +84,49 @@ router.post('/workflows/upload', async (req: Request, res: Response) => {
     }
 
     // Extract the template ID from the TemplateCreated event
-    const events = placeholderResult.events || [];
+    let events = placeholderResult.events || [];
+
+    // Fallback: if events are empty (can happen with CLI/API version mismatch),
+    // re-fetch the transaction details via waitForTransaction
+    if (events.length === 0 && placeholderResult.digest) {
+      console.log('⚠️ No events in initial response, re-fetching transaction...');
+      const txDetails = await suiClient.waitForTransaction({
+        digest: placeholderResult.digest,
+        options: { showEvents: true },
+      });
+      events = txDetails.events || [];
+    }
+
     const templateCreatedEvent = events.find((e: any) =>
       e.type.includes('::whitelist::TemplateCreated')
     );
 
-    if (!templateCreatedEvent) {
-      console.error('❌ No TemplateCreated event found in transaction');
-      console.error('Events:', JSON.stringify(events, null, 2));
-      throw new Error('Failed to extract template ID from transaction - no TemplateCreated event');
+    // Second fallback: if still no events, extract the new template ID by
+    // comparing the whitelist templates before/after (scan the vector tail)
+    let extractedTemplateId: string;
+
+    if (templateCreatedEvent) {
+      const eventData = templateCreatedEvent.parsedJson as { template_id: string };
+      extractedTemplateId = eventData.template_id;
+    } else {
+      console.log('⚠️ Still no TemplateCreated event, fetching template ID from whitelist...');
+      const updatedWhitelist = await suiClient.getObject({
+        id: ADMIN_CONFIG.WHITELIST_ID,
+        options: { showContent: true },
+      });
+      if (!updatedWhitelist.data?.content || updatedWhitelist.data.content.dataType !== 'moveObject') {
+        throw new Error('Failed to fetch whitelist after template creation');
+      }
+      const wlContent = updatedWhitelist.data.content as any;
+      const allTemplates = wlContent.fields.templates || [];
+      if (allTemplates.length === 0) {
+        throw new Error('No templates found in whitelist after creation');
+      }
+      // The last template in the vector is the one just created
+      const lastTemplate = allTemplates[allTemplates.length - 1];
+      extractedTemplateId = lastTemplate.fields.id;
     }
 
-    const eventData = templateCreatedEvent.parsedJson as { template_id: string };
-    const extractedTemplateId = eventData.template_id;
     console.log('✅ Template placeholder created with ID:', extractedTemplateId);
 
     // STEP 2: Encrypt and upload to Walrus with template ID
@@ -248,6 +278,72 @@ router.get('/workflows/list', async (req: Request, res: Response) => {
     console.error('Workflow list error:', error);
     res.status(500).json({
       error: 'Failed to list workflows',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/workflows/delete
+ * Supprime réellement un workflow de la marketplace (on-chain).
+ * Body: { workflowId }
+ */
+router.post('/workflows/delete', async (req: Request, res: Response) => {
+  try {
+    const { workflowId } = req.body;
+
+    if (!workflowId) {
+      return res.status(400).json({
+        error: 'Missing required field: workflowId',
+      });
+    }
+
+    // Ensure admin keypair is available to perform on-chain delete
+    const adminKeypair = getAdminKeypair();
+    if (!adminKeypair) {
+      throw new Error('Admin keypair not found - cannot delete template');
+    }
+
+    console.log('🗑️ Deleting workflow from marketplace on-chain:', workflowId);
+
+    // Call Move entry function to remove template from whitelist
+    const tx = new Transaction();
+    tx.moveCall({
+      target: `${ADMIN_CONFIG.PACKAGE_ID}::whitelist::remove_template`,
+      arguments: [
+        tx.object(ADMIN_CONFIG.WHITELIST_ID),
+        tx.object(ADMIN_CONFIG.CAP_ID),
+        tx.pure.id(workflowId),
+      ],
+    });
+
+    const result = await suiClient.signAndExecuteTransaction({
+      signer: adminKeypair,
+      transaction: tx,
+      options: {
+        showEffects: true,
+      },
+    });
+
+    if (result.effects?.status.status !== 'success') {
+      console.error('❌ Failed to delete template on-chain:', result.effects?.status);
+      return res.status(500).json({
+        error: 'Failed to delete workflow on-chain',
+        message: result.effects?.status.error || 'Unknown error',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        workflowId,
+        deleted: true,
+      },
+    });
+  } catch (error: any) {
+    console.error('Workflow delete error:', error);
+    res.status(500).json({
+      error: 'Failed to delete workflow',
       message: error.message,
     });
   }
